@@ -9,13 +9,15 @@ pandas
 wandb
 comet_ml
 hydra-core
+datasets
+huggingface_hub
 
 black
 isort
 pre-commit
 
 # lensless
-git+https://github.com/LCAV/LenslessPiCam.git
+git+https://github.com/LCAV/LenslessPiCam.git@fe150ed274667b13c7817effc6aad478861ebc91
 git+https://github.com/pvigier/perlin-numpy.git@5e26837db14042e51166eb6cad4c0df2c1907016
 waveprop
-git+https://github.com/ebezzam/slm-controller.git
+git+https://github.com/ebezzam/slm-controller.git@7fa4ffac3bdb9fae316f66f4ac9517806ae010ef

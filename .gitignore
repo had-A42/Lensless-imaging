@@ -69,6 +69,7 @@ target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+*.executed.ipynb
 
 # pyenv
 .python-version
@@ -107,6 +108,8 @@ saved/
 wandb/
 .cometml-runs/
 outputs/
+
+results/
 
 # editor, os cache directory
 .vscode/
