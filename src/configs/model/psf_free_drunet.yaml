@@ -1,0 +1,13 @@
+_target_: src.model.PSFFreeDRUNet
+
+channels: 3
+nc: [32, 64, 128, 256]
+depth: 4
+
+noise_level: 1.0
+trainable_noise_level: true
+
+checkpoint_path: null
+strict_checkpoint: true
+
+output_crop: null

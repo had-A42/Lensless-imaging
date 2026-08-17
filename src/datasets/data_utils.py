@@ -1,8 +1,8 @@
 from itertools import repeat
 
+import torch
 from hydra.utils import instantiate
 
-from src.datasets.collate import collate_fn
 from src.utils.init_utils import set_worker_seed
 
 
@@ -58,6 +58,14 @@ def get_dataloaders(config, device):
             should be applied on the whole batch. Depend on the
             tensor name.
     """
+    if config.get("dataloader_builder") is not None:
+        return instantiate(
+            config.dataloader_builder,
+            datasets_config=config.datasets,
+            simulator_config=config.simulator,
+            _recursive_=False,
+        )
+
     # transforms or augmentations init
     batch_transforms = instantiate(config.transforms.batch_transforms)
     move_batch_transforms_to_device(batch_transforms, device)
@@ -67,8 +75,11 @@ def get_dataloaders(config, device):
 
     # dataloaders init
     dataloaders = {}
-    for dataset_partition in config.datasets.keys():
+    run_config = config.get("trainer") or config.get("inferencer")
+    for partition_index, dataset_partition in enumerate(config.datasets.keys()):
         dataset = datasets[dataset_partition]
+        generator = torch.Generator()
+        generator.manual_seed(int(run_config.seed) + partition_index)
 
         assert config.dataloader.batch_size <= len(dataset), (
             f"The batch size ({config.dataloader.batch_size}) cannot "
@@ -78,10 +89,10 @@ def get_dataloaders(config, device):
         partition_dataloader = instantiate(
             config.dataloader,
             dataset=dataset,
-            collate_fn=collate_fn,
             drop_last=(dataset_partition == "train"),
             shuffle=(dataset_partition == "train"),
             worker_init_fn=set_worker_seed,
+            generator=generator,
         )
         dataloaders[dataset_partition] = partition_dataloader
 

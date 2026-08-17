@@ -71,6 +71,14 @@ target/
 .ipynb_checkpoints
 *.executed.ipynb
 
+# local research workflow
+/docs/
+/notebooks/
+/tests/
+/manifests/*.md
+/pytest.ini
+/requirements-notebook.txt
+
 # pyenv
 .python-version
 

@@ -1,0 +1,13 @@
+_target_: src.logger.WandBWriter
+project_name: lensless-imaging
+entity: had-2005-hse-university
+run_name: ${condition_name}-seed${trainer.seed}
+mode: online
+loss_names: [loss, mse_loss]
+log_checkpoints: true
+log_best_checkpoint_at_end: false
+log_images: true
+max_images: 4
+save_code: false
+log_git_state: false
+id_length: 8

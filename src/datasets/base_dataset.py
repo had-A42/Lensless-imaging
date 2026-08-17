@@ -1,6 +1,5 @@
 import logging
 import random
-from typing import List
 
 import torch
 from torch.utils.data import Dataset
@@ -36,7 +35,7 @@ class BaseDataset(Dataset):
         self._assert_index_is_valid(index)
 
         index = self._shuffle_and_limit_index(index, limit, shuffle_index)
-        self._index: List[dict] = index
+        self._index: list[dict] = index
 
         self.instance_transforms = instance_transforms
 

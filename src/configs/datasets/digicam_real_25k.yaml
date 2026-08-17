@@ -1,0 +1,25 @@
+train:
+  _target_: src.datasets.DigiCamRealDataset
+  repo_id: bezzam/DigiCam-Mirflickr-MultiMask-25K
+  revision: 21d82b67662ed1e590a40c98688c32cb3c74f079
+  split: train
+  indices: 19125
+  index_start: 0
+  cache_dir: ${oc.env:HF_HOME,./data/huggingface}
+  force_rgb: true
+  rotate_measurement: true
+  measurement_downsample: 1.0
+  target_size: [200, 266]
+
+validation:
+  _target_: src.datasets.DigiCamRealDataset
+  repo_id: bezzam/DigiCam-Mirflickr-MultiMask-25K
+  revision: 21d82b67662ed1e590a40c98688c32cb3c74f079
+  split: train
+  indices: 2125
+  index_start: 19125
+  cache_dir: ${oc.env:HF_HOME,./data/huggingface}
+  force_rgb: true
+  rotate_measurement: true
+  measurement_downsample: 1.0
+  target_size: [200, 266]

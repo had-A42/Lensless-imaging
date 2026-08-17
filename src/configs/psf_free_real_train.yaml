@@ -1,0 +1,66 @@
+defaults:
+  - model: psf_free_drunet
+  - writer: wandb_lensless
+  - metrics: reconstruction
+  - datasets: digicam_real_25k
+  - dataloader: reconstruction
+  - transforms: reconstruction
+  - _self_
+
+condition_name: real-25k-unet8m
+
+protocol:
+  measurement_shape: [3, 380, 507]
+  target_shape: [3, 200, 266]
+  roi: [80, 100, 200, 266]
+  train_masks: 85
+  train_scenes_per_mask: 225
+  validation_masks: 85
+  validation_scenes_per_mask: 25
+  test_masks: 15
+  test_scenes_per_mask: 250
+
+model:
+  output_crop: ${protocol.roi}
+
+optimizer:
+  _target_: torch.optim.Adam
+  lr: 1.0e-4
+
+lr_scheduler:
+  _target_: torch.optim.lr_scheduler.ConstantLR
+  factor: 1.0
+  total_iters: 1
+
+loss_function:
+  _target_: src.loss.ReconstructionLoss
+  mse_weight: 1.0
+  ssim_weight: 0.0
+  lpips_weight: 1.0
+  lpips_net: vgg
+  normalize_by_max: true
+
+writer:
+  loss_names: [loss, mse_loss, lpips_loss]
+
+trainer:
+  seed: 0
+  device: auto
+  device_tensors: [measurement, target]
+  n_epochs: 25
+  epoch_len: null
+  log_step: 50
+  monitor: max validation_PSNR
+  save_period: 1
+  early_stop: 25
+  save_dir: saved
+  resume_from: null
+  from_pretrained: null
+  override: false
+  skip_oom: false
+  max_grad_norm: 1.0
+  mask_balanced_eval: false
+
+hydra:
+  run:
+    dir: outputs/train/${condition_name}/${now:%Y-%m-%d_%H-%M-%S}

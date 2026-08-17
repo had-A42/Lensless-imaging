@@ -1,0 +1,40 @@
+dtype: float32
+output_dtype: float32
+use_torch: true
+torch_device: cpu
+grayscale: false
+
+pattern:
+  shape: [54, 26]
+  dist_type: uniform
+  min_val: 0.0
+  max_val: 1.0
+  bernoulli_p: 0.5
+  gaussian_std: 0.25
+
+optics:
+  sensor: rpi_hq
+  slm: adafruit
+  downsample: 8
+  object_height: 0.04
+  use_rotate: false
+  rotate_min: 0.0
+  rotate_max: 0.0
+  use_vertical_shift: false
+  vertical_shift_min: 0
+  vertical_shift_max: 0
+  use_horizontal_shift: false
+  horizontal_shift_min: 0
+  horizontal_shift_max: 0
+  flipud: true
+  deadspace: true
+  use_waveprop: true
+  scene2mask_min: 0.3
+  scene2mask_max: 0.3
+  mask2sensor_min: 0.002
+  mask2sensor_max: 0.002
+  min_val: 0.0
+  max_val: 255
+  quantize: true
+  return_float: true
+  snr_db: null

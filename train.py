@@ -1,4 +1,10 @@
+import os
 import warnings
+from pathlib import Path
+
+cache = Path(__file__).resolve().parent / ".cache" / "matplotlib"
+cache.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("MPLCONFIGDIR", str(cache))
 
 import hydra
 import torch
@@ -24,12 +30,17 @@ def main(config):
     """
     set_random_seed(config.trainer.seed)
 
-    project_config = OmegaConf.to_container(config)
+    project_config = OmegaConf.to_container(config, resolve=True)
     logger = setup_saving_and_logging(config)
     writer = instantiate(config.writer, logger, project_config)
 
     if config.trainer.device == "auto":
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.is_available():
+            device = "cuda"
+        elif torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = "cpu"
     else:
         device = config.trainer.device
 
@@ -70,7 +81,11 @@ def main(config):
         skip_oom=config.trainer.get("skip_oom", True),
     )
 
-    trainer.train()
+    try:
+        trainer.train()
+    finally:
+        if hasattr(writer, "finish"):
+            writer.finish()
 
 
 if __name__ == "__main__":

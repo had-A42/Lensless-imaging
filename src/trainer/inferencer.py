@@ -94,7 +94,7 @@ class Inferencer(BaseTrainer):
             part_logs[part] = logs
         return part_logs
 
-    def process_batch(self, batch_idx, batch, metrics, part):
+    def process_batch(self, batch_idx, batch, metrics, part, output_offset=0):
         """
         Run batch through the model, compute metrics, and
         save predictions to disk.
@@ -123,15 +123,14 @@ class Inferencer(BaseTrainer):
         batch.update(outputs)
 
         if metrics is not None:
+            batch_size = batch[self.cfg_trainer.device_tensors[0]].shape[0]
             for met in self.metrics["inference"]:
-                metrics.update(met.name, met(**batch))
+                metrics.update(met.name, met(**batch), n=batch_size)
 
         # Some saving logic. This is an example
         # Use if you need to save predictions on disk
 
         batch_size = batch["logits"].shape[0]
-        current_id = batch_idx * batch_size
-
         for i in range(batch_size):
             # clone because of
             # https://github.com/pytorch/pytorch/issues/1995
@@ -139,7 +138,7 @@ class Inferencer(BaseTrainer):
             label = batch["labels"][i].clone()
             pred_label = logits.argmax(dim=-1)
 
-            output_id = current_id + i
+            output_id = output_offset + i
 
             output = {
                 "pred_label": pred_label,
@@ -166,13 +165,15 @@ class Inferencer(BaseTrainer):
         self.is_train = False
         self.model.eval()
 
-        self.evaluation_metrics.reset()
+        if self.evaluation_metrics is not None:
+            self.evaluation_metrics.reset()
 
         # create Save dir
         if self.save_path is not None:
             (self.save_path / part).mkdir(exist_ok=True, parents=True)
 
         with torch.no_grad():
+            output_offset = 0
             for batch_idx, batch in tqdm(
                 enumerate(dataloader),
                 desc=part,
@@ -183,6 +184,10 @@ class Inferencer(BaseTrainer):
                     batch=batch,
                     part=part,
                     metrics=self.evaluation_metrics,
+                    output_offset=output_offset,
                 )
+                output_offset += batch[self.cfg_trainer.device_tensors[0]].shape[0]
 
+        if self.evaluation_metrics is None:
+            return {}
         return self.evaluation_metrics.result()

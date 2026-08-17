@@ -1,0 +1,21 @@
+_target_: src.datasets.build_on_the_fly_dataloaders
+
+train_mode: ${mask_mode}
+finite_mask_count: ${mask_count}
+train_steps: ${trainer.total_steps}
+validation_mask_count: 32
+validation_scenes_per_mask: 4
+batch_size: 4
+run_seed: ${trainer.seed}
+base_mask_seed: 42
+validation_seed: 52
+num_workers: 4
+pin_memory: false
+prefetch_factor: 1
+persistent_workers: true
+
+measurement_size: null
+target_size: [200, 266]
+simulation_mode: roi_convolution
+roi: [80, 100, 200, 266]
+finite_cache_size: 2

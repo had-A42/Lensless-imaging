@@ -1,0 +1,13 @@
+defaults:
+  - psf_free_real_train
+  - override datasets: digicam_real_1k_local
+  - _self_
+
+condition_name: real-1k-unet8m-pilot
+
+trainer:
+  seed: 1
+  n_epochs: 1
+  epoch_len: 25
+  save_period: 1
+  early_stop: 1

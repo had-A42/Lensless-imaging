@@ -11,7 +11,7 @@ class MetricTracker:
         Args:
             *keys (list[str]): list (as positional arguments) of metric
                 names (may include the names of losses)
-            writer (WandBWriter | CometMLWriter | None): experiment tracker.
+            writer (WandBWriter | None): experiment tracker.
                 Not used in this code version. Can be used to log metrics
                 from each batch.
         """

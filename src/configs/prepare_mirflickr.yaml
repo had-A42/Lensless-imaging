@@ -1,0 +1,26 @@
+source:
+  name: MIRFLICKR-25000
+  official_url: https://press.liacs.nl/mirflickr/mirflickr25k.v3b/mirflickr25k.zip
+  official_md5: a23d0a8564ee84cda5622a6c2f947785
+  selected_url: https://www.kaggle.com/datasets/skfrost19/mirflickr25k
+  selected_revision: kaggle-v1-2024-04-19
+  archive_path: data/raw/mirflickr25k/mirflickr25k-kaggle-v1.zip
+  expected_archive_md5: null
+  expected_archive_sha256: f1dadfc89966c43a65d361839e57b18ab6cc9397b1919fa57afdf0590f265588
+  expected_archive_bytes: 3072872067
+  extract_dir: data/raw/mirflickr25k/extracted
+  expected_image_count: 25000
+
+splits:
+  output_path: manifests/mirflickr25k_splits.json
+  seed: 42
+  split_counts:
+    train: 4096
+    validation: 128
+    test: 256
+extract: true
+verify_images: true
+
+hydra:
+  run:
+    dir: outputs/prepare_mirflickr/${now:%Y-%m-%d_%H-%M-%S}

@@ -1,0 +1,39 @@
+defaults:
+  - psf_free_scale
+  - scale_condition: finite_100
+  - _self_
+
+condition_name: ${scale_condition.name}
+mask_mode: ${scale_condition.mask_mode}
+mask_count: ${scale_condition.mask_count}
+
+trainer:
+  seed: 42
+  n_epochs: 50
+  epoch_len: 1000
+  total_steps: 50000
+  monitor: max validation_PSNR_mask_balanced
+  early_stop: -1
+  keep_last_checkpoints: 1
+
+dataloader_builder:
+  train_mask_seed: ${trainer.seed}
+  evaluation_mask_seed: 42
+  validation_scenes_per_mask: 128
+
+writer:
+  run_name: ${condition_name}-seed${trainer.seed}
+  group: mask-diversity-e01
+  job_type: ${condition_name}
+  tags: [synthetic, psf-free, article-resolution, e01]
+  log_checkpoints: false
+  log_best_checkpoint_at_end: true
+  save_code: false
+  log_git_state: false
+
+hydra:
+  run:
+    dir: outputs/train/e01/${condition_name}/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}
+  sweep:
+    dir: outputs/train/e01/multirun/${now:%Y-%m-%d_%H-%M-%S}
+    subdir: ${condition_name}/seed${trainer.seed}

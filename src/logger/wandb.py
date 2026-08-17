@@ -19,6 +19,9 @@ class WandBWriter:
         entity=None,
         run_id=None,
         run_name=None,
+        group=None,
+        job_type=None,
+        tags=None,
         mode="online",
         **kwargs,
     ):
@@ -37,10 +40,12 @@ class WandBWriter:
             mode (str): if online, log data to the remote server. If
                 offline, log locally.
         """
+        self.logger = logger
         try:
             import wandb
 
-            wandb.login()
+            if mode == "online":
+                wandb.login()
 
             self.run_id = run_id
 
@@ -49,6 +54,9 @@ class WandBWriter:
                 entity=entity,
                 config=project_config,
                 name=run_name,
+                group=group,
+                job_type=job_type,
+                tags=list(tags) if tags is not None else None,
                 resume="allow",  # resume the run if run_id existed
                 id=self.run_id,
                 mode=mode,
@@ -60,10 +68,12 @@ class WandBWriter:
             logger.warning("For use wandb install it via \n\t pip install wandb")
 
         self.step = 0
-        # the mode is usually equal to the current partition name
-        # used to separate Partition1 and Partition2 metrics
         self.mode = ""
         self.timer = datetime.now()
+
+    def finish(self):
+        if hasattr(self, "wandb"):
+            self.wandb.finish()
 
     def set_step(self, step, mode="train"):
         """
@@ -76,6 +86,8 @@ class WandBWriter:
             step (int): current step.
             mode (str): current mode (partition name).
         """
+        # the mode is usually equal to the current partition name
+        # used to separate Partition1 and Partition2 metrics
         self.mode = mode
         previous_step = self.step
         self.step = step
@@ -99,7 +111,15 @@ class WandBWriter:
         Returns:
             object_name (str): updated object name.
         """
-        return f"{object_name}_{self.mode}"
+        return f"{self.mode}/{object_name}"
+
+    def _log(self, data):
+        try:
+            if callable(data):
+                data = data()
+            self.wandb.log(data, step=self.step)
+        except Exception as error:
+            self.logger.warning(f"W&B logging failed: {error}")
 
     def add_checkpoint(self, checkpoint_path, save_dir):
         """
@@ -112,7 +132,10 @@ class WandBWriter:
             checkpoint_path (str): path to the checkpoint file.
             save_dir (str): path to the dir, where checkpoint is saved.
         """
-        self.wandb.save(checkpoint_path, base_path=save_dir)
+        try:
+            self.wandb.save(checkpoint_path, base_path=save_dir)
+        except Exception as error:
+            self.logger.warning(f"W&B checkpoint upload failed: {error}")
 
     def add_scalar(self, scalar_name, scalar):
         """
@@ -122,12 +145,7 @@ class WandBWriter:
             scalar_name (str): name of the scalar to use in the tracker.
             scalar (float): value of the scalar.
         """
-        self.wandb.log(
-            {
-                self._object_name(scalar_name): scalar,
-            },
-            step=self.step,
-        )
+        self._log({self._object_name(scalar_name): scalar})
 
     def add_scalars(self, scalars):
         """
@@ -136,12 +154,11 @@ class WandBWriter:
         Args:
             scalars (dict): dict, containing scalar name and value.
         """
-        self.wandb.log(
+        self._log(
             {
                 self._object_name(scalar_name): scalar
                 for scalar_name, scalar in scalars.items()
-            },
-            step=self.step,
+            }
         )
 
     def add_image(self, image_name, image):
@@ -153,9 +170,7 @@ class WandBWriter:
             image (Path | ndarray | Image): image in the WandB-friendly
                 format.
         """
-        self.wandb.log(
-            {self._object_name(image_name): self.wandb.Image(image)}, step=self.step
-        )
+        self._log(lambda: {self._object_name(image_name): self.wandb.Image(image)})
 
     def add_audio(self, audio_name, audio, sample_rate=None):
         """
@@ -167,13 +182,12 @@ class WandBWriter:
             sample_rate (int): audio sample rate.
         """
         audio = audio.detach().cpu().numpy().T
-        self.wandb.log(
-            {
+        self._log(
+            lambda: {
                 self._object_name(audio_name): self.wandb.Audio(
                     audio, sample_rate=sample_rate
                 )
-            },
-            step=self.step,
+            }
         )
 
     def add_text(self, text_name, text):
@@ -184,9 +198,7 @@ class WandBWriter:
             text_name (str): name of the text to use in the tracker.
             text (str): text content.
         """
-        self.wandb.log(
-            {self._object_name(text_name): self.wandb.Html(text)}, step=self.step
-        )
+        self._log(lambda: {self._object_name(text_name): self.wandb.Html(text)})
 
     def add_histogram(self, hist_name, values_for_hist, bins=None):
         """
@@ -203,9 +215,11 @@ class WandBWriter:
         if np_hist[0].shape[0] > 512:
             np_hist = np.histogram(values_for_hist, bins=512)
 
-        hist = self.wandb.Histogram(np_histogram=np_hist)
-
-        self.wandb.log({self._object_name(hist_name): hist}, step=self.step)
+        self._log(
+            lambda: {
+                self._object_name(hist_name): self.wandb.Histogram(np_histogram=np_hist)
+            }
+        )
 
     def add_table(self, table_name, table: pd.DataFrame):
         """
@@ -215,9 +229,8 @@ class WandBWriter:
             table_name (str): name of the table to use in the tracker.
             table (DataFrame): table content.
         """
-        self.wandb.log(
-            {self._object_name(table_name): self.wandb.Table(dataframe=table)},
-            step=self.step,
+        self._log(
+            lambda: {self._object_name(table_name): self.wandb.Table(dataframe=table)}
         )
 
     def add_images(self, image_names, images):

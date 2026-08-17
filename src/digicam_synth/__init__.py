@@ -1,4 +1,13 @@
-from src.digicam_synth.pipeline import convert_to_target_type
-from src.digicam_synth.pipeline import generate_random_pattern
-from src.digicam_synth.pipeline import pattern_to_psf
-from src.digicam_synth.pipeline import synthesize_measurement
+from src.digicam_synth.mask_protocol import (
+    DEFAULT_MASK_SEED,
+    MASK_COUNTS,
+    get_mask_records,
+    mask_seed,
+)
+
+__all__ = [
+    "DEFAULT_MASK_SEED",
+    "MASK_COUNTS",
+    "get_mask_records",
+    "mask_seed",
+]

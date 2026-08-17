@@ -1,0 +1,66 @@
+defaults:
+  - model: psf_free_drunet
+  - writer: wandb_lensless
+  - metrics: reconstruction
+  - datasets: mirflickr_on_the_fly
+  - dataloader_builder: digicam_article
+  - simulator: digicam_article
+  - _self_
+
+condition_name: finite-100
+mask_mode: finite
+mask_count: 100
+
+protocol:
+  measurement_shape: [3, 380, 507]
+  target_shape: [3, 200, 266]
+  roi: [80, 100, 200, 266]
+  simulation: aligned ROI canvas convolved with a fixed-geometry DigiCam PSF
+
+model:
+  output_crop: ${protocol.roi}
+
+optimizer:
+  _target_: torch.optim.Adam
+  lr: 1.0e-4
+  weight_decay: 0.0
+
+lr_scheduler:
+  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+  T_max: ${trainer.total_steps}
+  eta_min: 1.0e-6
+
+loss_function:
+  _target_: src.loss.ReconstructionLoss
+  mse_weight: 1.0
+  ssim_weight: 0.0
+  lpips_weight: 1.0
+  lpips_net: vgg
+  normalize_by_max: true
+
+writer:
+  loss_names: [loss, mse_loss, lpips_loss]
+
+trainer:
+  seed: 1
+  device: auto
+  device_tensors: [measurement, target]
+  n_epochs: 10
+  epoch_len: 1000
+  total_steps: 10000
+  log_step: 50
+  monitor: max validation_PSNR
+  save_period: 1
+  keep_last_checkpoints: null
+  early_stop: 10
+  save_dir: saved
+  resume_from: null
+  from_pretrained: null
+  override: false
+  skip_oom: false
+  max_grad_norm: null
+  mask_balanced_eval: true
+
+hydra:
+  run:
+    dir: outputs/train/${condition_name}/${now:%Y-%m-%d_%H-%M-%S}

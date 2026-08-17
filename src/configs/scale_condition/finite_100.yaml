@@ -1,0 +1,3 @@
+name: finite-100
+mask_mode: finite
+mask_count: 100

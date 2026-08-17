@@ -1,3 +1,5 @@
+from torchvision.utils import make_grid
+
 from src.metrics.tracker import MetricTracker
 from src.trainer.base_trainer import BaseTrainer
 
@@ -47,12 +49,18 @@ class Trainer(BaseTrainer):
             if self.lr_scheduler is not None:
                 self.lr_scheduler.step()
 
+        batch_size = batch[self.cfg_trainer.device_tensors[0]].shape[0]
+
         # update metrics for each loss (in case of multiple losses)
         for loss_name in self.config.writer.loss_names:
-            metrics.update(loss_name, batch[loss_name].item())
+            metrics.update(loss_name, batch[loss_name].item(), n=batch_size)
 
+        metric_values = {}
         for met in metric_funcs:
-            metrics.update(met.name, met(**batch))
+            value = met(**batch)
+            metrics.update(met.name, value, n=batch_size)
+            metric_values[met.name] = float(value.detach().cpu())
+        batch["metric_values"] = metric_values
         return batch
 
     def _log_batch(self, batch_idx, batch, mode="train"):
@@ -69,11 +77,38 @@ class Trainer(BaseTrainer):
         """
         # method to log data from you batch
         # such as audio, text or images, for example
+        # the method is called only every self.log_step steps
+        if not self.config.writer.get("log_images", False):
+            return
+
+        if any(key not in batch for key in ("measurement", "prediction", "target")):
+            return
 
         # logging scheme might be different for different partitions
-        if mode == "train":  # the method is called only every self.log_step steps
-            # Log Stuff
-            pass
-        else:
-            # Log Stuff
-            pass
+        # in train mode the method is called only every self.log_step steps
+        count = min(
+            int(self.config.writer.get("max_images", 4)),
+            batch["measurement"].shape[0],
+        )
+        measurements = []
+        reconstructions = []
+        for index in range(count):
+            measurements.append(
+                batch["measurement"][index].detach().float().cpu().clamp(0, 1)
+            )
+            reconstructions.extend(
+                [
+                    batch["prediction"][index].detach().float().cpu().clamp(0, 1),
+                    batch["target"][index].detach().float().cpu().clamp(0, 1),
+                ]
+            )
+
+        self.writer.add_image(
+            "measurement",
+            make_grid(measurements, nrow=count, padding=2),
+        )
+
+        self.writer.add_image(
+            "prediction_target",
+            make_grid(reconstructions, nrow=2, padding=2),
+        )

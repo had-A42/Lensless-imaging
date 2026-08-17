@@ -1,0 +1,23 @@
+train:
+  _target_: src.datasets.MirFlickrSceneDataset
+  root_dir: data/raw/mirflickr25k/extracted
+  splits_path: manifests/mirflickr25k_splits.json
+  split: train
+  image_size: null
+  verify_files: true
+
+validation:
+  _target_: src.datasets.MirFlickrSceneDataset
+  root_dir: data/raw/mirflickr25k/extracted
+  splits_path: manifests/mirflickr25k_splits.json
+  split: validation
+  image_size: null
+  verify_files: true
+
+test:
+  _target_: src.datasets.MirFlickrSceneDataset
+  root_dir: data/raw/mirflickr25k/extracted
+  splits_path: manifests/mirflickr25k_splits.json
+  split: test
+  image_size: null
+  verify_files: true
