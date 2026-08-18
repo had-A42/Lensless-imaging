@@ -1,0 +1,24 @@
+defaults:
+  - e01_mask_diversity
+  - _self_
+
+trainer:
+  n_epochs: 4
+  epoch_len: 2500
+  total_steps: 10000
+
+dataloader_builder:
+  validation_mask_count: 32
+  validation_scenes_per_mask: 32
+
+writer:
+  run_name: e01-screen-${condition_name}-seed${trainer.seed}
+  group: mask-diversity-e01-screen
+  tags: [synthetic, psf-free, article-resolution, e01, screen]
+
+hydra:
+  run:
+    dir: outputs/train/e01-screen/${condition_name}/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}
+  sweep:
+    dir: outputs/train/e01-screen/multirun/${now:%Y-%m-%d_%H-%M-%S}
+    subdir: ${condition_name}/seed${trainer.seed}
