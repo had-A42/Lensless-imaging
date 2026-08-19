@@ -1,17 +1,9 @@
 from pathlib import Path
 
 import torch
+from lensless.recon.drunet.network_unet import UNetRes
 from torch import Tensor, nn
 from torch.nn import functional as F
-
-try:
-    from lensless.recon.drunet.network_unet import UNetRes
-except ImportError as error:
-    raise ImportError(
-        "PSFFreeDRUNet requires LenslessPiCam. Install the project's `lensless` "
-        "dependency or install the local LenslessPiCam checkout in editable mode."
-    ) from error
-
 
 UNET8M_CHANNELS = (32, 64, 128, 256)
 UNET8M_DEPTH = 4

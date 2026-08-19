@@ -1,0 +1,7 @@
+_target_: src.model.psf_aware_lensless.PSFAwareLenslessModel
+repo_id: bezzam/digicam-mirflickr-multi-25k-unet4M-unrolled-admm5-unet4M-wave-psfNN
+revision: 9c965e99a6b9048eaa0eea3b8cdb2c5b9039416e
+cache_dir: ${oc.env:HF_HOME,./data/huggingface}
+output_crop: [80, 100, 200, 266]
+expected_parameters: 8092627
+expected_checkpoint_sha256: 51ca006404ae6cf54fb82f99c54afa06fbb6a55f09dc929f3882f1a4303f2818

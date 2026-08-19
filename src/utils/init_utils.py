@@ -113,13 +113,14 @@ def saving_init(save_dir, config):
     """
     run_id = None
 
+    run_config = config.get("trainer") or config.get("inferencer")
     if save_dir.exists():
-        if config.trainer.get("resume_from") is not None:
+        if run_config.get("resume_from") is not None:
             run_id = resume_config(save_dir)
-        elif config.trainer.override:
+        elif run_config.get("override", False):
             print(f"Overriding save directory '{save_dir}'...")
             shutil.rmtree(str(save_dir))
-        elif not config.trainer.override:
+        else:
             raise ValueError(
                 "Save directory exists. Change the name or set override=True"
             )
@@ -150,10 +151,11 @@ def setup_saving_and_logging(config):
     Returns:
         logger (Logger): logger that logs output.
     """
-    save_dir = ROOT_PATH / config.trainer.save_dir / config.writer.run_name
+    run_config = config.get("trainer") or config.get("inferencer")
+    save_dir = ROOT_PATH / run_config.save_dir / config.writer.run_name
     saving_init(save_dir, config)
 
-    if config.trainer.get("resume_from") is not None:
+    if run_config.get("resume_from") is not None:
         setup_logging(save_dir, append=True)
     else:
         setup_logging(save_dir, append=False)

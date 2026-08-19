@@ -6,4 +6,5 @@ max-complexity = 18
 select = B,C,E,F,W,T4,B9
 per-file-ignores =
     train.py:E402
+    inference.py:E402
     prepare_mirflickr.py:E402

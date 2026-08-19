@@ -1,12 +1,19 @@
+import os
 import warnings
+from pathlib import Path
+
+cache = Path(__file__).resolve().parent / ".cache" / "matplotlib"
+cache.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("MPLCONFIGDIR", str(cache))
 
 import hydra
 import torch
 from hydra.utils import instantiate
+from omegaconf import OmegaConf
 
 from src.datasets.data_utils import get_dataloaders
 from src.trainer import Inferencer
-from src.utils.init_utils import set_random_seed
+from src.utils.init_utils import set_random_seed, setup_saving_and_logging
 from src.utils.io_utils import ROOT_PATH
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -24,6 +31,13 @@ def main(config):
     """
     set_random_seed(config.inferencer.seed)
 
+    writer = None
+    logger = None
+    if config.get("writer") is not None:
+        project_config = OmegaConf.to_container(config, resolve=True)
+        logger = setup_saving_and_logging(config)
+        writer = instantiate(config.writer, logger, project_config)
+
     if config.inferencer.device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
     else:
@@ -35,14 +49,21 @@ def main(config):
 
     # build model architecture, then print to console
     model = instantiate(config.model).to(device)
-    print(model)
+    if logger is None:
+        print(model)
+    else:
+        logger.info(model)
 
     # get metrics
     metrics = instantiate(config.metrics)
 
     # save_path for model predictions
-    save_path = ROOT_PATH / "data" / "saved" / config.inferencer.save_path
+    if writer is None:
+        save_path = ROOT_PATH / "data" / "saved" / config.inferencer.save_path
+    else:
+        save_path = ROOT_PATH / config.inferencer.save_dir / config.writer.run_name
     save_path.mkdir(exist_ok=True, parents=True)
+    OmegaConf.save(config, save_path / "resolved_config.yaml", resolve=True)
 
     inferencer = Inferencer(
         model=model,
@@ -52,10 +73,16 @@ def main(config):
         batch_transforms=batch_transforms,
         save_path=save_path,
         metrics=metrics,
-        skip_model_load=False,
+        skip_model_load=config.inferencer.get("skip_model_load", False),
+        logger=logger,
+        writer=writer,
     )
 
-    logs = inferencer.run_inference()
+    try:
+        logs = inferencer.run_inference()
+    finally:
+        if writer is not None:
+            writer.finish()
 
     for part in logs.keys():
         for key, value in logs[part].items():

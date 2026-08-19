@@ -8,6 +8,7 @@ matplotlib
 pandas
 wandb
 hydra-core
+einops==0.8.1
 datasets
 huggingface_hub
 

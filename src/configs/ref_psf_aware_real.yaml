@@ -1,0 +1,58 @@
+defaults:
+  - model: psf_aware_lensless
+  - writer: wandb_lensless
+  - metrics: reconstruction
+  - datasets: digicam_psf_aware_test
+  - dataloader: reconstruction
+  - simulator: digicam_article
+  - transforms: reconstruction
+  - _self_
+
+condition_name: ref-psf-aware-real
+
+provenance:
+  dataset_repo: bezzam/DigiCam-Mirflickr-MultiMask-25K
+  dataset_revision: 21d82b67662ed1e590a40c98688c32cb3c74f079
+  model_repo: bezzam/digicam-mirflickr-multi-25k-unet4M-unrolled-admm5-unet4M-wave-psfNN
+  model_revision: 9c965e99a6b9048eaa0eea3b8cdb2c5b9039416e
+  model_parameters: 8092627
+  checkpoint_sha256: 51ca006404ae6cf54fb82f99c54afa06fbb6a55f09dc929f3882f1a4303f2818
+  lenslesspicam_commit: fe150ed274667b13c7817effc6aad478861ebc91
+  expected_samples: 3750
+  expected_masks: 15
+  expected_scenes_per_mask: 250
+
+dataloader:
+  batch_size: 2
+  num_workers: 0
+  pin_memory: true
+
+metrics:
+  device: ${inferencer.device}
+
+inferencer:
+  device_tensors: [measurement, target, psf]
+  device: auto
+  seed: 42
+  output_type: reconstruction
+  save_dir: saved
+  save_path: ref-psf-aware-real
+  from_pretrained: null
+  skip_model_load: true
+  override: false
+  example_indices: [1, 2, 4, 5, 9, 24, 33, 61]
+
+writer:
+  run_name: ref-psf-aware-real
+  group: reference-psf-aware
+  job_type: published-checkpoint
+  tags: [real, psf-aware, reference]
+  loss_names: []
+  log_checkpoints: false
+  log_best_checkpoint_at_end: false
+  save_code: false
+  log_git_state: false
+
+hydra:
+  run:
+    dir: outputs/inference/ref-psf-aware-real/${now:%Y-%m-%d_%H-%M-%S}

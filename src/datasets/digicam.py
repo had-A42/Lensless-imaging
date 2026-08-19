@@ -1,10 +1,15 @@
+import hashlib
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
+from huggingface_hub import hf_hub_download
 from torch.nn import functional as F
 from torch.utils.data import Dataset
+
+from src.digicam_synth.pipeline import pattern_to_psf
 
 DEFAULT_DIGICAM_REPO = "bezzam/DigiCam-Mirflickr-MultiMask-1K"
 
@@ -27,6 +32,11 @@ class DigiCamRealDataset(Dataset):
         rotate_measurement: bool = True,
         measurement_downsample: float = 1.0,
         target_size: list[int] | None = None,
+        target_resize_mode: str = "bilinear",
+        return_psf: bool = False,
+        simulator_config: Any | None = None,
+        expected_mask_count: int | None = None,
+        expected_scenes_per_mask: int | None = None,
     ):
         if not repo_id:
             raise ValueError("repo_id must be a non-empty string")
@@ -36,6 +46,10 @@ class DigiCamRealDataset(Dataset):
             raise ValueError("measurement_downsample must be positive")
         if index_start < 0:
             raise ValueError("index_start must be non-negative")
+        if target_resize_mode not in {"bilinear", "nearest"}:
+            raise ValueError("target_resize_mode must be bilinear or nearest")
+        if return_psf and revision is None:
+            raise ValueError("revision is required when return_psf is enabled")
         if target_size is not None:
             if len(target_size) != 2 or any(int(value) <= 0 for value in target_size):
                 raise ValueError("target_size must contain positive [height, width]")
@@ -57,6 +71,9 @@ class DigiCamRealDataset(Dataset):
         self.rotate_measurement = rotate_measurement
         self.measurement_downsample = float(measurement_downsample)
         self.target_size = target_size
+        self.target_resize_mode = target_resize_mode
+        self.return_psf = bool(return_psf)
+        self.simulator_config = simulator_config
         self.index_start = int(index_start)
 
         if source_dataset is None:
@@ -67,6 +84,50 @@ class DigiCamRealDataset(Dataset):
             raise TypeError("source_dataset must be an indexable dataset")
         self.source_dataset = source_dataset
         self.indices = self._normalize_indices(indices)
+        self.psfs = {}
+        self.psf_hashes = {}
+        if self.return_psf:
+            self._prepare_psfs(expected_mask_count, expected_scenes_per_mask)
+
+    def _prepare_psfs(self, expected_mask_count, expected_scenes_per_mask):
+        if self.simulator_config is None:
+            raise ValueError("simulator_config is required when return_psf is enabled")
+
+        mask_column = self.source_dataset[self.mask_key]
+        counts = Counter(int(mask_column[index]) for index in self.indices)
+        if expected_mask_count is not None and len(counts) != int(expected_mask_count):
+            raise ValueError(
+                f"expected {expected_mask_count} masks, found {len(counts)}"
+            )
+        if expected_scenes_per_mask is not None and set(counts.values()) != {
+            int(expected_scenes_per_mask)
+        }:
+            raise ValueError(
+                "each mask must have "
+                f"{expected_scenes_per_mask} scenes, found {counts}"
+            )
+
+        for mask_id in sorted(counts):
+            path = hf_hub_download(
+                repo_id=self.repo_id,
+                filename=f"masks/mask_{mask_id}.npy",
+                repo_type="dataset",
+                revision=self.revision,
+                cache_dir=self.cache_dir,
+            )
+            pattern = np.load(path)
+            psf, _, _ = pattern_to_psf(
+                self.simulator_config,
+                pattern,
+                np.random.default_rng(0),
+                create_simulator=False,
+            )
+            psf = torch.as_tensor(psf[0], dtype=torch.float32).movedim(-1, 0)
+            psf = torch.flip(psf, dims=(-2, -1))
+            psf = psf / psf.norm()
+            psf = psf.contiguous()
+            self.psfs[mask_id] = psf
+            self.psf_hashes[mask_id] = hashlib.sha256(psf.numpy().tobytes()).hexdigest()
 
     def _load_huggingface_dataset(self):
         try:
@@ -138,9 +199,13 @@ class DigiCamRealDataset(Dataset):
                 max(1, int(size / self.measurement_downsample))
                 for size in measurement.shape[-2:]
             )
-            measurement = self._resize(measurement, output_size)
+            measurement = self._resize(measurement, output_size, mode="bilinear")
         if self.target_size is not None:
-            target = self._resize(target, self.target_size)
+            target = self._resize(
+                target,
+                self.target_size,
+                mode=self.target_resize_mode,
+            )
 
         sample_id = self._metadata_value(
             record,
@@ -158,7 +223,7 @@ class DigiCamRealDataset(Dataset):
             default="unknown",
         )
 
-        return {
+        sample = {
             "measurement": measurement.contiguous(),
             "target": target.contiguous(),
             "sample_id": sample_id,
@@ -166,6 +231,11 @@ class DigiCamRealDataset(Dataset):
             "mask_id": mask_id,
             "split": self.split,
         }
+        if self.return_psf:
+            mask_id = int(mask_id)
+            sample["psf"] = self.psfs[mask_id]
+            sample["psf_sha256"] = self.psf_hashes[mask_id]
+        return sample
 
     def _image_to_chw_float(self, image: Any, field: str) -> torch.Tensor:
         if isinstance(image, torch.Tensor):
@@ -216,14 +286,15 @@ class DigiCamRealDataset(Dataset):
         return tensor
 
     @staticmethod
-    def _resize(image: torch.Tensor, size: list[int]) -> torch.Tensor:
-        return F.interpolate(
-            image.unsqueeze(0),
-            size=tuple(size),
-            mode="bilinear",
-            align_corners=False,
-            antialias=True,
-        ).squeeze(0)
+    def _resize(
+        image: torch.Tensor,
+        size: list[int],
+        mode: str = "bilinear",
+    ) -> torch.Tensor:
+        kwargs = {"size": tuple(size), "mode": mode}
+        if mode == "bilinear":
+            kwargs.update(align_corners=False, antialias=True)
+        return F.interpolate(image.unsqueeze(0), **kwargs).squeeze(0)
 
     @staticmethod
     def _metadata_value(record: Any, keys: list[str], default: Any) -> Any:

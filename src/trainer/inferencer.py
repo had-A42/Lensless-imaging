@@ -1,4 +1,10 @@
+import json
+import time
+
+import pandas as pd
 import torch
+from omegaconf import OmegaConf
+from torchvision.utils import make_grid
 from tqdm.auto import tqdm
 
 from src.metrics.tracker import MetricTracker
@@ -24,6 +30,8 @@ class Inferencer(BaseTrainer):
         metrics=None,
         batch_transforms=None,
         skip_model_load=False,
+        logger=None,
+        writer=None,
     ):
         """
         Initialize the Inferencer.
@@ -68,6 +76,10 @@ class Inferencer(BaseTrainer):
 
         # define metrics
         self.metrics = metrics
+        self.logger = logger
+        self.writer = writer
+        self.output_type = self.config.inferencer.get("output_type", "classification")
+        self.per_image_rows = {}
         if self.metrics is not None:
             self.evaluation_metrics = MetricTracker(
                 *[m.name for m in self.metrics["inference"]],
@@ -122,6 +134,14 @@ class Inferencer(BaseTrainer):
         outputs = self.model(**batch)
         batch.update(outputs)
 
+        if getattr(self, "output_type", "classification") == "reconstruction":
+            return self._process_reconstruction_batch(
+                batch=batch,
+                metrics=metrics,
+                part=part,
+                output_offset=output_offset,
+            )
+
         if metrics is not None:
             batch_size = batch[self.cfg_trainer.device_tensors[0]].shape[0]
             for met in self.metrics["inference"]:
@@ -151,6 +171,167 @@ class Inferencer(BaseTrainer):
 
         return batch
 
+    @staticmethod
+    def _item(values, index):
+        if isinstance(values, torch.Tensor):
+            value = values[index]
+            return value.item() if value.numel() == 1 else value.detach().cpu().tolist()
+        return values[index]
+
+    def _process_reconstruction_batch(self, batch, metrics, part, output_offset):
+        batch_size = batch["prediction"].shape[0]
+        metric_values = {}
+        if metrics is not None:
+            for metric in self.metrics["inference"]:
+                if hasattr(metric, "per_image"):
+                    values = metric.per_image(**batch)
+                else:
+                    values = metric(**batch).repeat(batch_size)
+                values = values.detach().cpu().flatten()
+                if values.numel() != batch_size:
+                    raise ValueError(
+                        f"{metric.name} returned {values.numel()} values for "
+                        f"a batch of {batch_size}"
+                    )
+                metrics.update(metric.name, values.mean(), n=batch_size)
+                metric_values[metric.name] = values
+
+        rows = self.per_image_rows.setdefault(part, [])
+        for index in range(batch_size):
+            row = {"sample_index": output_offset + index}
+            for key in ("sample_id", "scene_id", "mask_id", "psf_sha256", "split"):
+                if key in batch:
+                    row[key] = self._item(batch[key], index)
+            for name, values in metric_values.items():
+                row[name] = float(values[index])
+            rows.append(row)
+
+        self._save_reconstruction_examples(part, batch, output_offset)
+        return batch
+
+    def _save_reconstruction_examples(self, part, batch, output_offset):
+        example_indices = set(self.config.inferencer.get("example_indices", []))
+        if not example_indices:
+            return
+
+        for index in range(batch["prediction"].shape[0]):
+            output_id = output_offset + index
+            if output_id not in example_indices:
+                continue
+            output = {
+                "measurement": batch["measurement"][index].detach().cpu(),
+                "prediction": batch["prediction"][index].detach().cpu(),
+                "target": batch["target"][index].detach().cpu(),
+            }
+            for key in ("sample_id", "scene_id", "mask_id", "psf_sha256", "split"):
+                if key in batch:
+                    output[key] = self._item(batch[key], index)
+            torch.save(output, self.save_path / part / f"example_{output_id:04d}.pth")
+
+            if self.writer is not None and self.config.writer.get("log_images", False):
+                self.writer.set_step(0, part)
+                self.writer.add_image(
+                    f"example_{output_id:04d}_measurement",
+                    output["measurement"].clamp(0, 1),
+                )
+                self.writer.add_image(
+                    f"example_{output_id:04d}_prediction_target",
+                    make_grid(
+                        [
+                            output["prediction"].clamp(0, 1),
+                            output["target"].clamp(0, 1),
+                        ],
+                        nrow=2,
+                    ),
+                )
+
+    def _save_reconstruction_results(self, part, elapsed_seconds):
+        rows = self.per_image_rows.get(part, [])
+        if not rows:
+            return {}
+
+        per_image = pd.DataFrame(rows)
+        metric_names = [metric.name for metric in self.metrics["inference"]]
+        psf_by_mask = None
+        if "psf_sha256" in per_image:
+            hash_counts = per_image.groupby("mask_id")["psf_sha256"].nunique()
+            if not (hash_counts == 1).all():
+                raise ValueError("each mask_id must have exactly one PSF hash")
+            psf_by_mask = (
+                per_image.groupby("mask_id", sort=True)["psf_sha256"]
+                .first()
+                .reset_index()
+            )
+        per_mask = per_image.groupby("mask_id", sort=True).agg(
+            sample_count=("sample_index", "count"),
+            **{
+                f"{name}_{stat}": (name, stat)
+                for name in metric_names
+                for stat in ("mean", "std")
+            },
+        )
+        per_mask = per_mask.reset_index()
+        if psf_by_mask is not None:
+            per_mask = per_mask.merge(psf_by_mask, on="mask_id", validate="one_to_one")
+
+        sample_weighted = {name: float(per_image[name].mean()) for name in metric_names}
+        mask_balanced = {
+            name: float(per_mask[f"{name}_mean"].mean()) for name in metric_names
+        }
+        mask_std = {
+            name: float(per_mask[f"{name}_mean"].std()) for name in metric_names
+        }
+        model_load_seconds = float(getattr(self.model, "load_seconds", 0.0))
+        inference_seconds = max(elapsed_seconds - model_load_seconds, 1e-12)
+        summary = {
+            "sample_count": len(per_image),
+            "mask_count": len(per_mask),
+            "samples_per_mask": sorted(per_mask["sample_count"].unique().tolist()),
+            "sample_weighted": sample_weighted,
+            "mask_balanced": mask_balanced,
+            "mask_std": mask_std,
+            "end_to_end_seconds": elapsed_seconds,
+            "model_load_seconds": model_load_seconds,
+            "inference_seconds": inference_seconds,
+            "samples_per_second": len(per_image) / inference_seconds,
+            "peak_vram_bytes": (
+                torch.cuda.max_memory_allocated()
+                if str(self.device).startswith("cuda")
+                else 0
+            ),
+            "checkpoint_sha256": getattr(self.model, "checkpoint_sha256", None),
+        }
+        if self.config.get("provenance") is not None:
+            summary["provenance"] = OmegaConf.to_container(
+                self.config.provenance,
+                resolve=True,
+            )
+
+        output_dir = self.save_path / part
+        per_image.to_csv(output_dir / "per_image.csv", index=False)
+        per_mask.to_csv(output_dir / "per_mask.csv", index=False)
+        with (output_dir / "summary.json").open("w") as file:
+            json.dump(summary, file, indent=2)
+
+        if self.writer is not None:
+            self.writer.set_step(0, part)
+            self.writer.add_scalars(sample_weighted)
+            self.writer.add_scalars(
+                {
+                    f"{name}_mask_balanced": value
+                    for name, value in mask_balanced.items()
+                }
+            )
+            self.writer.add_scalar("end_to_end_seconds", elapsed_seconds)
+            self.writer.add_scalar("model_load_seconds", model_load_seconds)
+            self.writer.add_scalar("inference_seconds", inference_seconds)
+            self.writer.add_scalar("samples_per_second", summary["samples_per_second"])
+            self.writer.add_scalar("peak_vram_bytes", summary["peak_vram_bytes"])
+            self.writer.add_table("per_image", per_image)
+            self.writer.add_table("per_mask", per_mask)
+
+        return summary
+
     def _inference_part(self, part, dataloader):
         """
         Run inference on a given partition and save predictions
@@ -173,6 +354,9 @@ class Inferencer(BaseTrainer):
             (self.save_path / part).mkdir(exist_ok=True, parents=True)
 
         with torch.no_grad():
+            if str(self.device).startswith("cuda"):
+                torch.cuda.reset_peak_memory_stats()
+            start_time = time.perf_counter()
             output_offset = 0
             for batch_idx, batch in tqdm(
                 enumerate(dataloader),
@@ -187,6 +371,12 @@ class Inferencer(BaseTrainer):
                     output_offset=output_offset,
                 )
                 output_offset += batch[self.cfg_trainer.device_tensors[0]].shape[0]
+
+        if getattr(self, "output_type", "classification") == "reconstruction":
+            return self._save_reconstruction_results(
+                part,
+                elapsed_seconds=time.perf_counter() - start_time,
+            )
 
         if self.evaluation_metrics is None:
             return {}

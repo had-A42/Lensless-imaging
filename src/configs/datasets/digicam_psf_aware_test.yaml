@@ -1,0 +1,15 @@
+test:
+  _target_: src.datasets.DigiCamRealDataset
+  repo_id: bezzam/DigiCam-Mirflickr-MultiMask-25K
+  revision: 21d82b67662ed1e590a40c98688c32cb3c74f079
+  split: test
+  cache_dir: ${oc.env:HF_HOME,./data/huggingface}
+  force_rgb: true
+  rotate_measurement: true
+  measurement_downsample: 1.0
+  target_size: [200, 266]
+  target_resize_mode: bilinear
+  return_psf: true
+  simulator_config: ${simulator}
+  expected_mask_count: 15
+  expected_scenes_per_mask: 250

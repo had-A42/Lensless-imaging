@@ -42,7 +42,7 @@ class PSNRMetric(BaseMetric):
         self.normalize_by_max = bool(normalize_by_max)
         self.normalization_eps = float(normalization_eps)
 
-    def __call__(
+    def per_image(
         self, prediction: torch.Tensor, target: torch.Tensor, **batch
     ) -> torch.Tensor:
         prediction, target = _prepare_pair(
@@ -53,8 +53,12 @@ class PSNRMetric(BaseMetric):
         )
         mse_per_image = (prediction - target).square().flatten(1).mean(dim=1)
         peak_sq = prediction.new_tensor(self.data_range**2)
-        values = 10 * torch.log10(peak_sq / mse_per_image)
-        return values.mean().detach()
+        return (10 * torch.log10(peak_sq / mse_per_image)).detach()
+
+    def __call__(
+        self, prediction: torch.Tensor, target: torch.Tensor, **batch
+    ) -> torch.Tensor:
+        return self.per_image(prediction, target, **batch).mean()
 
 
 class SSIMMetric(BaseMetric):
@@ -83,9 +87,10 @@ class SSIMMetric(BaseMetric):
             data_range=self.data_range,
             kernel_size=self.window_size,
             sigma=self.sigma,
+            reduction="none",
         )
 
-    def __call__(
+    def per_image(
         self, prediction: torch.Tensor, target: torch.Tensor, **batch
     ) -> torch.Tensor:
         prediction, target = _prepare_pair(
@@ -95,22 +100,32 @@ class SSIMMetric(BaseMetric):
             normalization_eps=self.normalization_eps,
         )
         if min(prediction.shape[-2:]) <= self.window_size:
-            return structural_similarity(
-                prediction,
-                target,
-                data_range=self.data_range,
-                window_size=self.window_size,
-                sigma=self.sigma,
-            ).detach()
+            values = []
+            for index in range(prediction.shape[0]):
+                values.append(
+                    structural_similarity(
+                        prediction[index : index + 1],
+                        target[index : index + 1],
+                        data_range=self.data_range,
+                        window_size=self.window_size,
+                        sigma=self.sigma,
+                    )
+                )
+            return torch.stack(values).detach()
         if self._metric is None:
             self._metric = self._build_metric()
         self._metric = self._metric.to(prediction.device)
         self._metric.reset()
         try:
-            value = self._metric(prediction, target)
+            values = self._metric(prediction, target)
         finally:
             self._metric.reset()
-        return value.detach()
+        return values.detach()
+
+    def __call__(
+        self, prediction: torch.Tensor, target: torch.Tensor, **batch
+    ) -> torch.Tensor:
+        return self.per_image(prediction, target, **batch).mean()
 
 
 class LPIPSMetric(BaseMetric):
@@ -149,7 +164,7 @@ class LPIPSMetric(BaseMetric):
             normalize=True,
         )
 
-    def __call__(
+    def per_image(
         self, prediction: torch.Tensor, target: torch.Tensor, **batch
     ) -> torch.Tensor:
         prediction, target = _prepare_pair(
@@ -174,7 +189,19 @@ class LPIPSMetric(BaseMetric):
         self._metric = self._metric.to(metric_device)
         self._metric.reset()
         try:
-            value = self._metric(prediction, target)
+            if hasattr(self._metric, "net"):
+                values = self._metric.net(prediction, target, normalize=True)
+            else:
+                values = self._metric(prediction, target)
         finally:
             self._metric.reset()
-        return value.detach()
+        if values.ndim == 0:
+            values = values.repeat(prediction.shape[0])
+        else:
+            values = values.flatten(1).mean(dim=1)
+        return values.detach()
+
+    def __call__(
+        self, prediction: torch.Tensor, target: torch.Tensor, **batch
+    ) -> torch.Tensor:
+        return self.per_image(prediction, target, **batch).mean()

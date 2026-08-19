@@ -112,6 +112,7 @@ ENV/
 # input data, saved log, checkpoints, hydra outputs
 data/
 input/
+model_weights/
 saved/
 wandb/
 .cometml-runs/

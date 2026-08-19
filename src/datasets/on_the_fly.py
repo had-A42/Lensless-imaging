@@ -4,6 +4,7 @@ from functools import partial
 import numpy as np
 import torch
 from hydra.utils import instantiate, to_absolute_path
+from lensless.recon.rfft_convolve import RealFFTConvolve2D
 from omegaconf import OmegaConf
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
@@ -188,11 +189,6 @@ class DigiCamOnTheFlyDataset:
     def _get_convolver(self, seed, psf):
         if seed == self.current_convolver_seed:
             return self.current_convolver
-
-        try:
-            from lensless.recon.rfft_convolve import RealFFTConvolve2D
-        except ImportError as error:
-            raise ImportError("aligned simulation requires LenslessPiCam") from error
 
         self.current_convolver_seed = seed
         self.current_convolver = RealFFTConvolve2D(
