@@ -19,3 +19,8 @@ target_size: [200, 266]
 simulation_mode: roi_convolution
 roi: [80, 100, 200, 266]
 finite_cache_size: 2
+psf_cache:
+  mode: "off"
+  root_dir: data/psf_cache
+  request_modes: [finite]
+  warmup: false

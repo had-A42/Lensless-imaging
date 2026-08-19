@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib
 import sys
 from collections.abc import Iterator
@@ -231,6 +232,7 @@ def pattern_to_psf(
     pattern: np.ndarray,
     rng: np.random.Generator,
     filepath: Path | None = None,
+    create_simulator: bool = True,
 ) -> tuple[Any, Any, dict[str, Any]]:
     backend = _load_optics_backend()
     use_torch = bool(config.use_torch)
@@ -344,19 +346,21 @@ def pattern_to_psf(
     max_val = float(_config_get(config.optics, "max_val", 255))
     quantize = bool(_config_get(config.optics, "quantize", True))
     return_float = bool(_config_get(config.optics, "return_float", True))
-    simulator = backend["FarFieldSimulator"](
-        psf=psf,
-        scene2mask=scene2mask,
-        mask2sensor=mask2sensor,
-        sensor=config.optics.sensor,
-        snr_db=_config_get(config.optics, "snr_db", None),
-        object_height=config.optics.object_height,
-        max_val=max_val,
-        quantize=quantize,
-        return_float=return_float,
-        device_conv=torch_device,
-        is_torch=use_torch,
-    )
+    simulator = None
+    if create_simulator:
+        simulator = backend["FarFieldSimulator"](
+            psf=psf,
+            scene2mask=scene2mask,
+            mask2sensor=mask2sensor,
+            sensor=config.optics.sensor,
+            snr_db=_config_get(config.optics, "snr_db", None),
+            object_height=config.optics.object_height,
+            max_val=max_val,
+            quantize=quantize,
+            return_float=return_float,
+            device_conv=torch_device,
+            is_torch=use_torch,
+        )
 
     mask_hwc = np.moveaxis(_to_numpy(mask), 0, -1).astype(np.float32)
     if filepath is not None:
@@ -368,6 +372,9 @@ def pattern_to_psf(
 
     psf_metadata = {
         "array_contract": "DHWC",
+        "pattern_sha256": hashlib.sha256(
+            np.ascontiguousarray(pattern).tobytes()
+        ).hexdigest(),
         "pattern_shape": pattern_original_shape,
         "programmed_pattern_shape": list(programmed_pattern.shape),
         "mask_shape": list(mask_hwc.shape),

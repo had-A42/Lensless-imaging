@@ -10,6 +10,9 @@ trainer:
 dataloader_builder:
   validation_mask_count: 32
   validation_scenes_per_mask: 32
+  psf_cache:
+    mode: read_write
+    warmup: true
 
 writer:
   run_name: e01-screen-${condition_name}-seed${trainer.seed}

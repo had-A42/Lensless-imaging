@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from functools import partial
 
 import numpy as np
 import torch
@@ -17,14 +18,20 @@ from src.digicam_synth.pipeline import (
     generate_random_pattern,
     pattern_to_psf,
 )
+from src.digicam_synth.psf_cache import PSFCache
 
 DEFAULT_VALIDATION_SEED = 52
 
 
-def build_digicam_mask(config, seed):
+def build_digicam_mask(config, seed, create_simulator=True):
     rng = np.random.default_rng(seed)
     pattern = generate_random_pattern(config, rng)
-    return pattern_to_psf(config, pattern, rng)
+    return pattern_to_psf(
+        config,
+        pattern,
+        rng,
+        create_simulator=create_simulator,
+    )
 
 
 def _sample_seed(run_seed, step, slot):
@@ -89,6 +96,7 @@ class DigiCamOnTheFlyDataset:
         simulation_mode="far_field",
         roi=None,
         finite_cache_size=8,
+        psf_cache=None,
         mask_factory=None,
     ):
         self.scenes = scenes
@@ -106,7 +114,10 @@ class DigiCamOnTheFlyDataset:
         self.simulation_mode = str(simulation_mode)
         self.roi = tuple(int(value) for value in roi) if roi is not None else None
         self.finite_cache_size = int(finite_cache_size)
-        self.mask_factory = mask_factory or build_digicam_mask
+        self.mask_factory = mask_factory or partial(
+            build_digicam_mask,
+            create_simulator=self.simulation_mode == "far_field",
+        )
         self.mask_cache = OrderedDict()
         self.current_mask_seed = None
         self.current_mask = None
@@ -128,6 +139,9 @@ class DigiCamOnTheFlyDataset:
                 raise ValueError("target_size must match ROI height and width")
         if self.finite_cache_size < 0:
             raise ValueError("finite_cache_size must be non-negative")
+        self.psf_cache = PSFCache(psf_cache, self.simulator_config)
+        if self.psf_cache.mode != "off" and self.simulation_mode != "roi_convolution":
+            raise ValueError("PSF disk cache currently supports roi_convolution only")
 
     def __len__(self):
         return len(self.scenes)
@@ -145,7 +159,12 @@ class DigiCamOnTheFlyDataset:
             self.current_mask = value
             return value
 
-        value = self.mask_factory(self.simulator_config, seed)
+        disk_value = self.psf_cache.load(seed, request["mode"])
+        if disk_value is None:
+            value = self.mask_factory(self.simulator_config, seed)
+            self.psf_cache.save(seed, request["mode"], value[0])
+        else:
+            value = disk_value, None, {}
         self.current_mask_seed = seed
         self.current_mask = value
         if use_cache:
@@ -153,6 +172,18 @@ class DigiCamOnTheFlyDataset:
             while len(self.mask_cache) > self.finite_cache_size:
                 self.mask_cache.popitem(last=False)
         return value
+
+    def warmup_psf_cache(self, mask_records):
+        for record in mask_records:
+            self._get_mask(
+                {
+                    "mask_seed": int(record["mask_seed"]),
+                    "mode": "finite",
+                }
+            )
+        self.mask_cache.clear()
+        self.current_mask_seed = None
+        self.current_mask = None
 
     def _get_convolver(self, seed, psf):
         if seed == self.current_convolver_seed:
@@ -377,6 +408,7 @@ def build_on_the_fly_dataloaders(
     simulation_mode="far_field",
     roi=None,
     finite_cache_size=8,
+    psf_cache=None,
     train_scenes=None,
     validation_scenes=None,
     mask_factory=None,
@@ -411,6 +443,10 @@ def build_on_the_fly_dataloaders(
         int(validation_mask_count),
     )
 
+    psf_cache = dict(psf_cache or {})
+    if psf_cache.get("root_dir") is not None:
+        psf_cache["root_dir"] = to_absolute_path(psf_cache["root_dir"])
+
     train_dataset = DigiCamOnTheFlyDataset(
         train_scenes,
         simulator_config,
@@ -419,6 +455,7 @@ def build_on_the_fly_dataloaders(
         simulation_mode=simulation_mode,
         roi=roi,
         finite_cache_size=finite_cache_size,
+        psf_cache=psf_cache,
         mask_factory=mask_factory,
     )
     validation_dataset = DigiCamOnTheFlyDataset(
@@ -429,8 +466,14 @@ def build_on_the_fly_dataloaders(
         simulation_mode=simulation_mode,
         roi=roi,
         finite_cache_size=finite_cache_size,
+        psf_cache=psf_cache,
         mask_factory=mask_factory,
     )
+
+    if train_dataset.psf_cache.warmup:
+        if train_records is not None:
+            train_dataset.warmup_psf_cache(train_records)
+        validation_dataset.warmup_psf_cache(validation_records)
 
     train_sampler = DigiCamMaskBatchSampler(
         scene_count=len(train_scenes),
