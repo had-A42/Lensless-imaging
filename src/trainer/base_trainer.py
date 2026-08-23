@@ -1,4 +1,5 @@
 import random
+import time
 from abc import abstractmethod
 
 import numpy as np
@@ -243,6 +244,7 @@ class BaseTrainer:
         self.train_metrics.reset()
         self.writer.set_step(self.global_step)
         self.writer.add_scalar("epoch", epoch)
+        train_start = time.perf_counter()
         for batch_idx, batch in enumerate(
             tqdm(self.train_dataloader, desc="train", total=self.epoch_len)
         ):
@@ -285,11 +287,29 @@ class BaseTrainer:
         self.writer.set_step(self.global_step)
         self._log_scalars(self.train_metrics)
         logs = self.train_metrics.result()
+        train_seconds = time.perf_counter() - train_start
 
         # Run val/test
+        validation_seconds = 0.0
+        validation_start = time.perf_counter()
         for part, dataloader in self.evaluation_dataloaders.items():
             val_logs = self._evaluation_epoch(epoch, part, dataloader)
             logs.update(**{f"{part}_{name}": value for name, value in val_logs.items()})
+        if self.evaluation_dataloaders:
+            validation_seconds = time.perf_counter() - validation_start
+
+        total_seconds = train_seconds + validation_seconds
+        timing = {
+            "train_seconds": train_seconds,
+            "validation_seconds": validation_seconds,
+            "validation_share": validation_seconds / total_seconds
+            if total_seconds
+            else 0.0,
+        }
+        logs.update(timing)
+        self.writer.set_step(self.global_step)
+        for name, value in timing.items():
+            self.writer.add_scalar(name, value)
 
         return logs
 

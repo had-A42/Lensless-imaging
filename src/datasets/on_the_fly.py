@@ -383,9 +383,9 @@ def _scene_dataset(config):
 def build_on_the_fly_dataloaders(
     datasets_config,
     simulator_config,
-    train_mode,
-    finite_mask_count,
-    train_steps,
+    train_mode=None,
+    finite_mask_count=None,
+    train_steps=None,
     validation_mask_count=None,
     validation_scenes_per_mask=4,
     validation_steps=None,
@@ -408,6 +408,7 @@ def build_on_the_fly_dataloaders(
     train_scenes=None,
     validation_scenes=None,
     mask_factory=None,
+    evaluation_only=False,
 ):
     if train_mask_seed is None:
         train_mask_seed = base_mask_seed
@@ -421,18 +422,9 @@ def build_on_the_fly_dataloaders(
     ):
         raise ValueError("validation_steps and validation_mask_count must match")
 
-    if train_scenes is None:
-        train_scenes = _scene_dataset(datasets_config.train)
     if validation_scenes is None:
         validation_scenes = _scene_dataset(datasets_config.validation)
 
-    train_records = None
-    if train_mode == "finite":
-        train_records = get_mask_records(
-            train_mask_seed,
-            "train",
-            int(finite_mask_count),
-        )
     validation_records = get_mask_records(
         evaluation_mask_seed,
         "validation",
@@ -443,17 +435,6 @@ def build_on_the_fly_dataloaders(
     if psf_cache.get("root_dir") is not None:
         psf_cache["root_dir"] = to_absolute_path(psf_cache["root_dir"])
 
-    train_dataset = DigiCamOnTheFlyDataset(
-        train_scenes,
-        simulator_config,
-        measurement_size=measurement_size,
-        target_size=target_size,
-        simulation_mode=simulation_mode,
-        roi=roi,
-        finite_cache_size=finite_cache_size,
-        psf_cache=psf_cache,
-        mask_factory=mask_factory,
-    )
     validation_dataset = DigiCamOnTheFlyDataset(
         validation_scenes,
         simulator_config,
@@ -466,20 +447,8 @@ def build_on_the_fly_dataloaders(
         mask_factory=mask_factory,
     )
 
-    if train_dataset.psf_cache.warmup:
-        if train_records is not None:
-            train_dataset.warmup_psf_cache(train_records)
+    if validation_dataset.psf_cache.warmup:
         validation_dataset.warmup_psf_cache(validation_records)
-
-    train_sampler = DigiCamMaskBatchSampler(
-        scene_count=len(train_scenes),
-        batch_size=batch_size,
-        steps=train_steps,
-        run_seed=run_seed,
-        mode=train_mode,
-        mask_records=train_records,
-        infinite_base_seed=train_mask_seed,
-    )
     validation_sampler = DigiCamValidationBatchSampler(
         scene_count=len(validation_scenes),
         batch_size=batch_size,
@@ -496,8 +465,53 @@ def build_on_the_fly_dataloaders(
         if prefetch_factor is not None:
             loader_args["prefetch_factor"] = int(prefetch_factor)
         loader_args["persistent_workers"] = bool(persistent_workers)
-    train_generator = torch.Generator().manual_seed(int(run_seed))
     validation_generator = torch.Generator().manual_seed(int(validation_seed))
+    validation_loader = DataLoader(
+        validation_dataset,
+        batch_sampler=validation_sampler,
+        generator=validation_generator,
+        **loader_args,
+    )
+    if evaluation_only:
+        return {"validation": validation_loader}, {}
+
+    if train_mode is None or train_steps is None:
+        raise ValueError("training needs train_mode and train_steps")
+    if train_mode == "finite" and finite_mask_count is None:
+        raise ValueError("finite training needs finite_mask_count")
+    if train_scenes is None:
+        train_scenes = _scene_dataset(datasets_config.train)
+
+    train_records = None
+    if train_mode == "finite":
+        train_records = get_mask_records(
+            train_mask_seed,
+            "train",
+            int(finite_mask_count),
+        )
+    train_dataset = DigiCamOnTheFlyDataset(
+        train_scenes,
+        simulator_config,
+        measurement_size=measurement_size,
+        target_size=target_size,
+        simulation_mode=simulation_mode,
+        roi=roi,
+        finite_cache_size=finite_cache_size,
+        psf_cache=psf_cache,
+        mask_factory=mask_factory,
+    )
+    if train_dataset.psf_cache.warmup and train_records is not None:
+        train_dataset.warmup_psf_cache(train_records)
+    train_sampler = DigiCamMaskBatchSampler(
+        scene_count=len(train_scenes),
+        batch_size=batch_size,
+        steps=train_steps,
+        run_seed=run_seed,
+        mode=train_mode,
+        mask_records=train_records,
+        infinite_base_seed=train_mask_seed,
+    )
+    train_generator = torch.Generator().manual_seed(int(run_seed))
     return {
         "train": DataLoader(
             train_dataset,
@@ -505,10 +519,5 @@ def build_on_the_fly_dataloaders(
             generator=train_generator,
             **loader_args,
         ),
-        "validation": DataLoader(
-            validation_dataset,
-            batch_sampler=validation_sampler,
-            generator=validation_generator,
-            **loader_args,
-        ),
+        "validation": validation_loader,
     }, {}

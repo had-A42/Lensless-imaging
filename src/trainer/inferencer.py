@@ -1,3 +1,4 @@
+import hashlib
 import json
 import time
 
@@ -91,6 +92,22 @@ class Inferencer(BaseTrainer):
         if not skip_model_load:
             # init model
             self._from_pretrained(config.inferencer.get("from_pretrained"))
+
+    def _from_pretrained(self, pretrained_path):
+        digest = hashlib.sha256()
+        with open(pretrained_path, "rb") as file:
+            for chunk in iter(lambda: file.read(1024 * 1024), b""):
+                digest.update(chunk)
+        checkpoint_sha256 = digest.hexdigest()
+
+        expected_sha256 = None
+        if self.config.get("provenance") is not None:
+            expected_sha256 = self.config.provenance.get("checkpoint_sha256")
+        if expected_sha256 is not None and checkpoint_sha256 != expected_sha256:
+            raise ValueError("checkpoint SHA256 does not match the experiment config")
+
+        super()._from_pretrained(pretrained_path)
+        self.model.checkpoint_sha256 = checkpoint_sha256
 
     def run_inference(self):
         """
@@ -279,7 +296,8 @@ class Inferencer(BaseTrainer):
             name: float(per_mask[f"{name}_mean"].mean()) for name in metric_names
         }
         mask_std = {
-            name: float(per_mask[f"{name}_mean"].std()) for name in metric_names
+            name: (float(per_mask[f"{name}_mean"].std()) if len(per_mask) > 1 else None)
+            for name in metric_names
         }
         model_load_seconds = float(getattr(self.model, "load_seconds", 0.0))
         inference_seconds = max(elapsed_seconds - model_load_seconds, 1e-12)
@@ -306,6 +324,7 @@ class Inferencer(BaseTrainer):
                 self.config.provenance,
                 resolve=True,
             )
+            self._check_expected_counts(summary)
 
         output_dir = self.save_path / part
         per_image.to_csv(output_dir / "per_image.csv", index=False)
@@ -331,6 +350,27 @@ class Inferencer(BaseTrainer):
             self.writer.add_table("per_mask", per_mask)
 
         return summary
+
+    def _check_expected_counts(self, summary):
+        expected = self.config.provenance
+        checks = {
+            "expected_samples": summary["sample_count"],
+            "expected_masks": summary["mask_count"],
+        }
+        for name, actual in checks.items():
+            value = expected.get(name)
+            if value is not None and int(value) != actual:
+                raise ValueError(f"{name} is {value}, but inference produced {actual}")
+
+        scenes_per_mask = expected.get("expected_scenes_per_mask")
+        if scenes_per_mask is not None and summary["samples_per_mask"] != [
+            int(scenes_per_mask)
+        ]:
+            raise ValueError(
+                "expected_scenes_per_mask is "
+                f"{scenes_per_mask}, but inference produced "
+                f"{summary['samples_per_mask']}"
+            )
 
     def _inference_part(self, part, dataloader):
         """

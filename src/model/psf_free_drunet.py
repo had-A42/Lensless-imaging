@@ -1,3 +1,4 @@
+import hashlib
 from pathlib import Path
 
 import torch
@@ -18,6 +19,7 @@ class PSFFreeDRUNet(nn.Module):
         noise_level: float = 1.0,
         trainable_noise_level: bool = True,
         checkpoint_path: str | Path | None = None,
+        checkpoint_sha256: str | None = None,
         strict_checkpoint: bool = True,
         output_crop: list[int] | None = None,
     ) -> None:
@@ -65,7 +67,11 @@ class PSFFreeDRUNet(nn.Module):
         )
 
         if checkpoint_path is not None:
-            self.load_local_checkpoint(checkpoint_path, strict=strict_checkpoint)
+            self.load_local_checkpoint(
+                checkpoint_path,
+                strict=strict_checkpoint,
+                expected_sha256=checkpoint_sha256,
+            )
 
     @property
     def num_parameters(self) -> int:
@@ -149,9 +155,16 @@ class PSFFreeDRUNet(nn.Module):
         return network_state, loaded_noise_level
 
     def load_local_checkpoint(
-        self, checkpoint_path: str | Path, strict: bool = True
+        self,
+        checkpoint_path: str | Path,
+        strict: bool = True,
+        expected_sha256: str | None = None,
     ) -> nn.modules.module._IncompatibleKeys:
         path = self._checkpoint_file(checkpoint_path)
+        if expected_sha256 is not None:
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            if digest != expected_sha256:
+                raise ValueError("checkpoint SHA256 does not match the model config")
         checkpoint = self._load_tensor_mapping(path)
         network_state, loaded_noise_level = self._extract_checkpoint_state(checkpoint)
         incompatible = self.network.load_state_dict(network_state, strict=strict)

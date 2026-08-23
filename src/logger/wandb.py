@@ -91,14 +91,13 @@ class WandBWriter:
         self.mode = mode
         previous_step = self.step
         self.step = step
-        if step == 0:
-            self.timer = datetime.now()
-        else:
-            duration = datetime.now() - self.timer
+        now = datetime.now()
+        if step != 0 and step != previous_step:
+            duration = now - self.timer
             self.add_scalar(
                 "steps_per_sec", (self.step - previous_step) / duration.total_seconds()
             )
-            self.timer = datetime.now()
+        self.timer = now
 
     def _object_name(self, object_name):
         """

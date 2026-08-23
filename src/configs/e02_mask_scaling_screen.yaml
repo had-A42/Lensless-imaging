@@ -1,0 +1,28 @@
+defaults:
+  - e02_mask_scaling
+  - override scale_condition: finite_1000
+  - _self_
+
+trainer:
+  n_epochs: 4
+  epoch_len: 2500
+  total_steps: 10000
+
+dataloader_builder:
+  validation_scenes_per_mask: 32
+  psf_cache:
+    mode: read_write
+    warmup: false
+
+writer:
+  run_name: e02-screen-${condition_name}-seed${trainer.seed}
+  group: mask-scaling-e02-screen
+  job_type: ${condition_name}
+  tags: [synthetic, psf-free, article-resolution, e02, screen]
+
+hydra:
+  run:
+    dir: outputs/train/e02-screen/${condition_name}/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}
+  sweep:
+    dir: outputs/train/e02-screen/multirun/${now:%Y-%m-%d_%H-%M-%S}
+    subdir: ${condition_name}/seed${trainer.seed}

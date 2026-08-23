@@ -1,0 +1,58 @@
+defaults:
+  - model: psf_free_drunet
+  - writer: wandb_lensless
+  - metrics: reconstruction
+  - datasets: digicam_psf_aware_test
+  - dataloader: reconstruction
+  - simulator: digicam_article
+  - transforms: reconstruction
+  - _self_
+
+condition_name: finite-100
+
+provenance:
+  experiment: E01
+  checkpoint_condition: ${condition_name}
+  checkpoint_sha256: null
+  dataset_repo: bezzam/DigiCam-Mirflickr-MultiMask-25K
+  dataset_revision: 21d82b67662ed1e590a40c98688c32cb3c74f079
+  expected_samples: 3750
+  expected_masks: 15
+  expected_scenes_per_mask: 250
+
+datasets:
+  test:
+    return_psf: false
+
+model:
+  output_crop: [80, 100, 200, 266]
+
+metrics:
+  device: ${inferencer.device}
+
+inferencer:
+  device_tensors: [measurement, target]
+  device: auto
+  seed: 42
+  output_type: reconstruction
+  save_dir: saved
+  save_path: e01-psf-free-real-${condition_name}
+  from_pretrained: null
+  skip_model_load: false
+  override: false
+  example_indices: [1, 2, 4, 5, 9, 24, 33, 61]
+
+writer:
+  run_name: e01-psf-free-real-${condition_name}-seed${inferencer.seed}
+  group: mask-diversity-e01-real-eval
+  job_type: ${condition_name}
+  tags: [real, psf-free, e01, evaluation]
+  loss_names: []
+  log_checkpoints: false
+  log_best_checkpoint_at_end: false
+  save_code: false
+  log_git_state: false
+
+hydra:
+  run:
+    dir: outputs/inference/e01-real/${condition_name}/${now:%Y-%m-%d_%H-%M-%S}

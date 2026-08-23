@@ -1,0 +1,60 @@
+defaults:
+  - model: psf_free_drunet
+  - writer: wandb_lensless
+  - metrics: reconstruction
+  - datasets: mirflickr_on_the_fly
+  - dataloader_builder: digicam_validation
+  - simulator: digicam_article
+  - _self_
+
+condition_name: finite-100
+
+protocol:
+  measurement_shape: [3, 380, 507]
+  target_shape: [3, 200, 266]
+  roi: [80, 100, 200, 266]
+  validation_masks: 32
+  scenes_per_mask: 32
+
+provenance:
+  experiment: E01
+  checkpoint_condition: ${condition_name}
+  checkpoint_sha256: null
+  evaluation_mask_seed: ${dataloader_builder.evaluation_mask_seed}
+  validation_seed: ${dataloader_builder.validation_seed}
+  expected_samples: 1024
+  expected_masks: 32
+  expected_scenes_per_mask: 32
+
+model:
+  output_crop: ${protocol.roi}
+
+metrics:
+  device: ${inferencer.device}
+
+inferencer:
+  device_tensors: [measurement, target]
+  device: auto
+  seed: 42
+  output_type: reconstruction
+  save_dir: saved
+  save_path: e01-psf-free-${condition_name}
+  from_pretrained: null
+  skip_model_load: false
+  override: false
+  example_indices: [0, 31, 32, 511, 1023]
+
+writer:
+  run_name: e01-eval-${condition_name}-seed${inferencer.seed}
+  group: mask-diversity-e01-eval
+  job_type: checkpoint-evaluation
+  tags: [synthetic, psf-free, article-resolution, e01, evaluation]
+  loss_names: []
+  log_checkpoints: false
+  log_best_checkpoint_at_end: false
+  save_code: false
+  log_git_state: false
+
+hydra:
+  run:
+    dir: outputs/inference/e01/${condition_name}/${now:%Y-%m-%d_%H-%M-%S}
