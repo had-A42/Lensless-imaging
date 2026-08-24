@@ -180,6 +180,8 @@ class LPIPSMetric(BaseMetric):
             metric_device = prediction.device
         else:
             metric_device = torch.device(self.device)
+            if metric_device.type == "cuda" and metric_device.index is None:
+                metric_device = torch.device("cuda", torch.cuda.current_device())
             if prediction.device != metric_device:
                 raise ValueError(
                     f"LPIPS inputs are on {prediction.device}, configured "

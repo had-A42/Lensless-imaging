@@ -1,0 +1,7 @@
+defaults:
+  - digicam_article
+  - _self_
+
+pattern:
+  dist_type: bernoulli
+  bernoulli_p: 0.5

@@ -1,0 +1,27 @@
+defaults:
+  - e02_mask_scaling_screen
+  - override scale_condition: finite_100
+  - _self_
+
+trainer:
+  seed: 42
+  n_epochs: 5
+  epoch_len: 10000
+  total_steps: 50000
+
+dataloader_builder:
+  validation_mask_count: 32
+  validation_scenes_per_mask: 32
+
+writer:
+  run_name: lsc01-${condition_name}-seed${trainer.seed}
+  group: psf-free-scaling-lsc01
+  job_type: ${condition_name}
+  tags: [synthetic, psf-free, long-budget, lsc01]
+
+hydra:
+  run:
+    dir: outputs/train/lsc01/${condition_name}/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}
+  sweep:
+    dir: outputs/train/lsc01/multirun/${now:%Y-%m-%d_%H-%M-%S}
+    subdir: ${condition_name}/seed${trainer.seed}

@@ -14,6 +14,17 @@ from src.metrics.tracker import MetricTracker
 from src.utils.io_utils import ROOT_PATH
 
 
+def _validate_iteration_budget(n_epochs, epoch_len, total_steps):
+    if epoch_len is None or total_steps is None:
+        return
+    actual_steps = n_epochs * epoch_len
+    if actual_steps != total_steps:
+        raise ValueError(
+            "trainer.total_steps must equal trainer.n_epochs * trainer.epoch_len, "
+            f"got {total_steps} and {actual_steps}"
+        )
+
+
 def _aggregate_per_mask_rows(rows):
     batches = pd.DataFrame(rows)
     metric_names = [
@@ -115,6 +126,11 @@ class BaseTrainer:
         self._last_epoch = 0  # required for saving on interruption
         self.start_epoch = 1
         self.epochs = self.cfg_trainer.n_epochs
+        _validate_iteration_budget(
+            self.epochs,
+            epoch_len,
+            self.cfg_trainer.get("total_steps"),
+        )
 
         # configuration to monitor model performance and save best
 

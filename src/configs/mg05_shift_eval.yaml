@@ -1,0 +1,26 @@
+defaults:
+  - e01_psf_free_eval
+  - override simulator: digicam_article
+  - _self_
+
+model_condition: finite-100
+shift_name: nominal
+condition_name: ${model_condition}-${shift_name}-seed${inferencer.seed}
+
+provenance:
+  experiment: MG-05A
+  checkpoint_condition: ${model_condition}
+  shift: ${shift_name}
+
+inferencer:
+  save_path: mg05-${condition_name}
+
+writer:
+  run_name: mg05-${condition_name}
+  group: generator-ablation-mg05
+  job_type: ${shift_name}
+  tags: [synthetic, psf-free, mg05, evaluation, distribution-shift]
+
+hydra:
+  run:
+    dir: outputs/inference/mg05/${model_condition}/${shift_name}/seed${inferencer.seed}/${now:%Y-%m-%d_%H-%M-%S}

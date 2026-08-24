@@ -1,0 +1,15 @@
+defaults:
+  - digicam_article
+  - _self_
+
+optics:
+  use_vertical_shift: true
+  vertical_shift_min: -20
+  vertical_shift_max: 20
+  use_horizontal_shift: true
+  horizontal_shift_min: -20
+  horizontal_shift_max: 20
+  scene2mask_min: 0.25
+  scene2mask_max: 0.30
+  mask2sensor_min: 0.002
+  mask2sensor_max: 0.004

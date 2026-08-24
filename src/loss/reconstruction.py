@@ -165,7 +165,9 @@ class ReconstructionLoss(nn.Module):
 
         if self.lpips_weight > 0:
             if self.lpips_model is None:
-                self.lpips_model = self._build_lpips().to(prediction.device)
+                self.lpips_model = (
+                    self._build_lpips().requires_grad_(False).to(prediction.device)
+                )
             self.lpips_model.eval()
             lpips_loss = self.lpips_model.net(
                 prediction,
