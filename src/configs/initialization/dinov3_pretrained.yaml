@@ -1,0 +1,3 @@
+name: dinov3-pretrained
+local_snapshot_path: ${oc.env:DINOV3_SNAPSHOT,null}
+pretrained_encoder: true

@@ -1,0 +1,12 @@
+_target_: src.model.PSFFreeDINOv3
+
+local_snapshot_path: null
+pretrained_encoder: false
+freeze_encoder: true
+
+channels: 3
+feature_channels: [96, 192, 384, 768]
+decoder_channels: 128
+decoder_seed: 52
+pad_multiple: 32
+output_crop: [80, 100, 200, 266]
