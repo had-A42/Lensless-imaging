@@ -1,0 +1,72 @@
+defaults:
+  - psf_free_scale
+  - scale_condition: finite_100
+  - override datasets: mnist_on_the_fly
+  - override metrics: mnist_reconstruction
+  - _self_
+
+condition_name: mnist-${scale_condition.name}
+mask_mode: ${scale_condition.mask_mode}
+mask_count: ${scale_condition.mask_count}
+
+protocol:
+  experiment: MNIST-PSFF-01
+  scope: LenslessMic-motivated simple-scene pilot using the existing RGB DigiCam simulator, not a LenslessMic reproduction
+  measurement_shape: [3, 380, 507]
+  target_shape: [3, 256, 256]
+  roi: [62, 125, 256, 256]
+  representation: 32x32 padded MNIST with 8x8 superpixels
+
+model:
+  output_crop: ${protocol.roi}
+  output_normalization: min_max
+
+mnist_loss_function:
+  _target_: src.loss.MultiscaleReconstructionLoss
+  pooling_factor: 8
+  pooled_mse_weight: 0.0
+  pooled_ssim_weight: 0.0
+  pooled_dice_weight: 1.0
+  full_ssim_weight: 0.0
+  full_l1_weight: 0.0
+
+loss_function: ${mnist_loss_function}
+
+trainer:
+  seed: 42
+  n_epochs: 10
+  epoch_len: 1000
+  total_steps: 10000
+  monitor: max validation_PSNR_32_mask_balanced
+  early_stop: -1
+  keep_last_checkpoints: 1
+
+dataloader_builder:
+  train_mask_seed: 42
+  evaluation_mask_seed: 52
+  validation_mask_count: 32
+  validation_scenes_per_mask: 32
+  measurement_size: null
+  target_size: [256, 256]
+  roi: ${protocol.roi}
+  finite_cache_size: 2
+  psf_cache:
+    mode: read_write
+    warmup: false
+
+writer:
+  loss_names: [loss, pooled_mse_loss, pooled_ssim_loss, pooled_dice_loss, full_ssim_loss, full_l1_loss]
+  run_name: ${condition_name}-seed${trainer.seed}
+  group: mnist-psf-free
+  job_type: ${condition_name}
+  tags: [synthetic, psf-free, mnist, superpixel]
+  image_log_step: 1000
+  max_images: 4
+  log_checkpoints: false
+  log_best_checkpoint_at_end: true
+  save_code: false
+  log_git_state: false
+
+hydra:
+  run:
+    dir: outputs/train/mnist/${scale_condition.name}/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}

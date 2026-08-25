@@ -1,0 +1,21 @@
+train:
+  _target_: src.datasets.MNISTSceneDataset
+  root_dir: data/raw/mnist
+  split: train
+  split_seed: 42
+  validation_per_class: 500
+  superpixel_size: 8
+  channels: 3
+  download: true
+  max_samples: null
+
+validation:
+  _target_: src.datasets.MNISTSceneDataset
+  root_dir: data/raw/mnist
+  split: validation
+  split_seed: 42
+  validation_per_class: 500
+  superpixel_size: 8
+  channels: 3
+  download: true
+  max_samples: null

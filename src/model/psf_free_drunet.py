@@ -22,6 +22,7 @@ class PSFFreeDRUNet(nn.Module):
         checkpoint_sha256: str | None = None,
         strict_checkpoint: bool = True,
         output_crop: list[int] | None = None,
+        output_normalization: str = "positive_max",
     ) -> None:
         super().__init__()
         nc = tuple(int(value) for value in nc)
@@ -37,6 +38,9 @@ class PSFFreeDRUNet(nn.Module):
         self.channels = int(channels)
         self.nc = nc
         self.depth = int(depth)
+        if output_normalization not in {"positive_max", "min_max"}:
+            raise ValueError("output_normalization must be positive_max or min_max")
+        self.output_normalization = output_normalization
         if output_crop is not None:
             if len(output_crop) != 4:
                 raise ValueError("output_crop must contain [top, left, height, width]")
@@ -234,13 +238,7 @@ class PSFFreeDRUNet(nn.Module):
 
         prediction = self.network(network_input)
         prediction = prediction[..., top : top + height, left : left + width]
-        prediction = prediction.clamp_min(0.0) * scale
-        prediction_max = prediction.amax(dim=(1, 2, 3), keepdim=True)
-        prediction = torch.where(
-            prediction_max > 0,
-            prediction / prediction_max.clamp_min(1e-12),
-            prediction,
-        )
+
         if self.output_crop is not None:
             crop_top, crop_left, crop_height, crop_width = self.output_crop
             crop_bottom = crop_top + crop_height
@@ -250,6 +248,31 @@ class PSFFreeDRUNet(nn.Module):
                     "output_crop exceeds the reconstructed image bounds: "
                     f"crop={self.output_crop}, image={(height, width)}"
                 )
+            if self.output_normalization == "min_max":
+                prediction = prediction[
+                    ...,
+                    crop_top:crop_bottom,
+                    crop_left:crop_right,
+                ]
+
+        if self.output_normalization == "positive_max":
+            prediction = prediction.clamp_min(0.0) * scale
+            prediction_max = prediction.amax(dim=(1, 2, 3), keepdim=True)
+            prediction = torch.where(
+                prediction_max > 0,
+                prediction / prediction_max.clamp_min(1e-12),
+                prediction,
+            )
+        else:
+            prediction_min = prediction.amin(dim=(1, 2, 3), keepdim=True)
+            prediction = prediction - prediction_min
+            prediction_max = prediction.amax(dim=(1, 2, 3), keepdim=True)
+            prediction = torch.where(
+                prediction_max > 0,
+                prediction / prediction_max.clamp_min(1e-12),
+                prediction,
+            )
+        if self.output_crop is not None and self.output_normalization == "positive_max":
             prediction = prediction[
                 ...,
                 crop_top:crop_bottom,

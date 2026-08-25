@@ -179,3 +179,99 @@ class ReconstructionLoss(nn.Module):
 
         losses["loss"] = total_loss
         return losses
+
+
+class MultiscaleReconstructionLoss(nn.Module):
+    def __init__(
+        self,
+        pooling_factor: int = 8,
+        pooled_mse_weight: float = 1.0,
+        pooled_ssim_weight: float = 1.0,
+        pooled_dice_weight: float = 0.0,
+        full_ssim_weight: float = 1.0,
+        full_l1_weight: float = 1.0,
+        data_range: float = 1.0,
+    ):
+        super().__init__()
+        if pooling_factor <= 0:
+            raise ValueError("pooling_factor must be positive")
+        weights = (
+            pooled_mse_weight,
+            pooled_ssim_weight,
+            pooled_dice_weight,
+            full_ssim_weight,
+            full_l1_weight,
+        )
+        if any(weight < 0 for weight in weights):
+            raise ValueError("loss weights must be non-negative")
+        if not any(weight > 0 for weight in weights):
+            raise ValueError("at least one loss weight must be positive")
+
+        self.pooling_factor = int(pooling_factor)
+        self.pooled_mse_weight = float(pooled_mse_weight)
+        self.pooled_ssim_weight = float(pooled_ssim_weight)
+        self.pooled_dice_weight = float(pooled_dice_weight)
+        self.full_ssim_weight = float(full_ssim_weight)
+        self.full_l1_weight = float(full_l1_weight)
+        self.data_range = float(data_range)
+
+    def forward(
+        self,
+        prediction: torch.Tensor,
+        target: torch.Tensor,
+        **batch,
+    ) -> dict[str, torch.Tensor]:
+        del batch
+        _validate_image_pair(prediction, target)
+        height, width = prediction.shape[-2:]
+        if height % self.pooling_factor or width % self.pooling_factor:
+            raise ValueError("image size must be divisible by pooling_factor")
+
+        pooled_prediction = F.avg_pool2d(
+            prediction,
+            kernel_size=self.pooling_factor,
+            stride=self.pooling_factor,
+        )
+        pooled_target = F.avg_pool2d(
+            target,
+            kernel_size=self.pooling_factor,
+            stride=self.pooling_factor,
+        )
+
+        pooled_mse_loss = F.mse_loss(pooled_prediction, pooled_target)
+        pooled_ssim_loss = 1 - structural_similarity(
+            pooled_prediction,
+            pooled_target,
+            data_range=self.data_range,
+            window_size=3,
+            sigma=0.5,
+        )
+        intersection = (pooled_prediction * pooled_target).sum(dim=(1, 2, 3))
+        total = pooled_prediction.square().sum(
+            dim=(1, 2, 3)
+        ) + pooled_target.square().sum(dim=(1, 2, 3))
+        pooled_dice_loss = 1 - ((2 * intersection + 1e-8) / (total + 1e-8)).mean()
+        full_ssim_loss = 1 - structural_similarity(
+            prediction,
+            target,
+            data_range=self.data_range,
+            window_size=7,
+            sigma=1.0,
+        )
+        full_l1_loss = F.l1_loss(prediction, target)
+
+        loss = (
+            self.pooled_mse_weight * pooled_mse_loss
+            + self.pooled_ssim_weight * pooled_ssim_loss
+            + self.pooled_dice_weight * pooled_dice_loss
+            + self.full_ssim_weight * full_ssim_loss
+            + self.full_l1_weight * full_l1_loss
+        )
+        return {
+            "loss": loss,
+            "pooled_mse_loss": pooled_mse_loss,
+            "pooled_ssim_loss": pooled_ssim_loss,
+            "pooled_dice_loss": pooled_dice_loss,
+            "full_ssim_loss": full_ssim_loss,
+            "full_l1_loss": full_l1_loss,
+        }

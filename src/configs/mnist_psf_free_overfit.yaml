@@ -1,0 +1,36 @@
+defaults:
+  - mnist_psf_free
+  - _self_
+
+mask_count: 1
+
+mnist_loss_function:
+  pooled_mse_weight: 0.0
+  pooled_ssim_weight: 0.0
+  pooled_dice_weight: 1.0
+  full_ssim_weight: 0.0
+  full_l1_weight: 0.0
+
+datasets:
+  train:
+    max_samples: 4
+
+trainer:
+  n_epochs: 2
+  epoch_len: 250
+  total_steps: 500
+  monitor: max PSNR_32
+
+dataloader_builder:
+  validation_mask_count: 1
+  validation_scenes_per_mask: 4
+
+writer:
+  run_name: mnist-one-batch-overfit-seed${trainer.seed}
+  group: mnist-psf-free-diagnostic
+  job_type: one-batch-overfit
+  image_log_step: 250
+
+hydra:
+  run:
+    dir: outputs/train/mnist/one-batch-overfit/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}

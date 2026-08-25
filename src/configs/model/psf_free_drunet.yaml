@@ -11,3 +11,4 @@ checkpoint_path: null
 strict_checkpoint: true
 
 output_crop: null
+output_normalization: positive_max

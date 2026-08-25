@@ -225,7 +225,7 @@ class DigiCamOnTheFlyDataset:
             measurement = _to_chw(result["measurement"], self.measurement_size)
             target = _to_chw(result["ground_truth"], self.target_size)
 
-        return {
+        sample = {
             "measurement": measurement,
             "target": target,
             "sample_id": f'{scene["scene_id"]}__{request["mask_id"]}',
@@ -238,6 +238,9 @@ class DigiCamOnTheFlyDataset:
             "split": scene["split"],
             "mode": request["mode"],
         }
+        if "label" in scene:
+            sample["label"] = scene["label"]
+        return sample
 
 
 class DigiCamMaskBatchSampler:
@@ -375,8 +378,10 @@ class DigiCamValidationBatchSampler:
 
 def _scene_dataset(config):
     config = OmegaConf.create(OmegaConf.to_container(config, resolve=True))
-    config.root_dir = to_absolute_path(config.root_dir)
-    config.splits_path = to_absolute_path(config.splits_path)
+    if config.get("root_dir") is not None:
+        config.root_dir = to_absolute_path(config.root_dir)
+    if config.get("splits_path") is not None:
+        config.splits_path = to_absolute_path(config.splits_path)
     return instantiate(config)
 
 

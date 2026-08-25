@@ -1,4 +1,5 @@
 import torch
+from torch.nn import functional as F
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 
 from src.loss.reconstruction import (
@@ -128,6 +129,41 @@ class SSIMMetric(BaseMetric):
         self, prediction: torch.Tensor, target: torch.Tensor, **batch
     ) -> torch.Tensor:
         return self.per_image(prediction, target, **batch).mean()
+
+
+def _average_pool_pair(
+    prediction: torch.Tensor, target: torch.Tensor, factor: int
+) -> tuple[torch.Tensor, torch.Tensor]:
+    _validate_image_pair(prediction, target)
+    factor = int(factor)
+    if factor <= 0:
+        raise ValueError("pooling factor must be positive")
+    if prediction.shape[-2] % factor or prediction.shape[-1] % factor:
+        raise ValueError("image size must be divisible by pooling factor")
+    return (
+        F.avg_pool2d(prediction, factor),
+        F.avg_pool2d(target, factor),
+    )
+
+
+class PooledPSNRMetric(PSNRMetric):
+    def __init__(self, pooling_factor=8, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.pooling_factor = int(pooling_factor)
+
+    def per_image(self, prediction, target, **batch):
+        prediction, target = _average_pool_pair(prediction, target, self.pooling_factor)
+        return super().per_image(prediction, target, **batch)
+
+
+class PooledSSIMMetric(SSIMMetric):
+    def __init__(self, pooling_factor=8, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.pooling_factor = int(pooling_factor)
+
+    def per_image(self, prediction, target, **batch):
+        prediction, target = _average_pool_pair(prediction, target, self.pooling_factor)
+        return super().per_image(prediction, target, **batch)
 
 
 class LPIPSMetric(BaseMetric):
