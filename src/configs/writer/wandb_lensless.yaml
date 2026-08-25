@@ -7,6 +7,7 @@ loss_names: [loss, mse_loss]
 log_checkpoints: true
 log_best_checkpoint_at_end: false
 log_images: true
+image_log_step: 1000
 max_images: 4
 save_code: false
 log_git_state: false

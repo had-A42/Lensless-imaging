@@ -1,6 +1,7 @@
 import random
 import time
 from abc import abstractmethod
+from contextlib import nullcontext
 
 import numpy as np
 import pandas as pd
@@ -30,14 +31,19 @@ def _aggregate_per_mask_rows(rows):
     metric_names = [
         name for name in batches.columns if name not in {"mask_id", "sample_count"}
     ]
+    for name in metric_names:
+        values = batches[name].to_numpy(dtype=float)
+        if not np.isfinite(values).all():
+            raise FloatingPointError(f"Non-finite per-mask metric: {name}")
     aggregated = []
     for mask_id, group in batches.groupby("mask_id", sort=False):
         sample_count = int(group["sample_count"].sum())
         row = {"mask_id": mask_id, "sample_count": sample_count}
         for name in metric_names:
-            row[name] = float(
-                (group[name] * group["sample_count"]).sum() / sample_count
-            )
+            value = float((group[name] * group["sample_count"]).sum() / sample_count)
+            if not np.isfinite(value):
+                raise FloatingPointError(f"Non-finite per-mask aggregate: {name}")
+            row[name] = value
         aggregated.append(row)
     return pd.DataFrame(aggregated)
 
@@ -106,6 +112,7 @@ class BaseTrainer:
         self.global_step = 0
         self.sampler_step = 0
         self.not_improved_count = 0
+        self._configure_amp()
 
         # define dataloaders
         self.train_dataloader_source = dataloaders["train"]
@@ -279,7 +286,7 @@ class BaseTrainer:
                     raise e
 
             self.global_step += 1
-            self.train_metrics.update("grad_norm", self._get_grad_norm())
+            self.train_metrics.update("grad_norm", batch["grad_norm"])
 
             # log current results
             if batch_idx % self.log_step == 0:
@@ -486,6 +493,45 @@ class BaseTrainer:
                 )
         return batch
 
+    def _configure_amp(self):
+        amp = self.cfg_trainer.get("amp")
+        self.amp_enabled = bool(amp and amp.get("enabled", False))
+        self.amp_dtype = None
+        self.amp_device_type = None
+        self.grad_scaler = None
+        if not self.amp_enabled:
+            return
+
+        dtype_name = str(amp.get("dtype", "bfloat16")).lower()
+        dtypes = {
+            "bfloat16": torch.bfloat16,
+            "bf16": torch.bfloat16,
+            "float16": torch.float16,
+            "fp16": torch.float16,
+        }
+        if dtype_name not in dtypes:
+            raise ValueError("trainer.amp.dtype must be bfloat16 or float16")
+
+        self.amp_dtype = dtypes[dtype_name]
+        self.amp_device_type = torch.device(self.device).type
+        if self.amp_device_type == "cpu":
+            if self.amp_dtype != torch.bfloat16:
+                raise ValueError("CPU AMP supports only bfloat16")
+            return
+        if self.amp_device_type != "cuda":
+            raise ValueError("AMP is supported only on CUDA or CPU")
+
+        if self.amp_dtype == torch.float16:
+            self.grad_scaler = torch.cuda.amp.GradScaler()
+
+    def autocast_context(self):
+        if not getattr(self, "amp_enabled", False):
+            return nullcontext()
+        return torch.autocast(
+            device_type=self.amp_device_type,
+            dtype=self.amp_dtype,
+        )
+
     def _clip_grad_norm(self):
         """
         Clips the gradient norm by the value defined in
@@ -576,6 +622,7 @@ class BaseTrainer:
                 checkpoint-epochEpochNumber.pth)
         """
         arch = type(self.model).__name__
+        grad_scaler = getattr(self, "grad_scaler", None)
         state = {
             "arch": arch,
             "epoch": epoch,
@@ -588,6 +635,9 @@ class BaseTrainer:
             "sampler_step": self.sampler_step,
             "rng_state": self._rng_state(),
             "dataloader_rng_state": self._dataloader_rng_state(),
+            "grad_scaler": grad_scaler.state_dict()
+            if grad_scaler is not None
+            else None,
             "config": self.config,
         }
         filename = str(self.checkpoint_dir / f"checkpoint-epoch{epoch}.pth")
@@ -682,6 +732,10 @@ class BaseTrainer:
         else:
             self.optimizer.load_state_dict(checkpoint["optimizer"])
             self.lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
+            if self.grad_scaler is not None:
+                scaler_state = checkpoint.get("grad_scaler")
+                if scaler_state is not None:
+                    self.grad_scaler.load_state_dict(scaler_state)
 
         self._set_sampler_step(self.sampler_step)
         self._restore_dataloader_rng_state(checkpoint.get("dataloader_rng_state"))

@@ -117,6 +117,7 @@ saved/
 wandb/
 .cometml-runs/
 outputs/
+multirun/
 
 results/
 

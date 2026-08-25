@@ -1,3 +1,5 @@
+import math
+
 import pandas as pd
 
 
@@ -38,11 +40,15 @@ class MetricTracker:
             n (int): how many times to count this value.
         """
         value = float(value)
+        if not math.isfinite(value):
+            raise FloatingPointError(f"Non-finite metric {key}: {value}")
         # if self.writer is not None:
         #     self.writer.add_scalar(key, value)
         self._data.loc[key, "total"] += value * n
         self._data.loc[key, "counts"] += n
         self._data.loc[key, "average"] = self._data.total[key] / self._data.counts[key]
+        if not math.isfinite(self._data.loc[key, "average"]):
+            raise FloatingPointError(f"Non-finite aggregated metric: {key}")
 
     def avg(self, key):
         """
@@ -63,7 +69,11 @@ class MetricTracker:
             average_metrics (dict): dict, containing average metrics
                 for each metric name.
         """
-        return dict(self._data.average)
+        result = dict(self._data.average)
+        for key, value in result.items():
+            if not math.isfinite(value):
+                raise FloatingPointError(f"Non-finite aggregated metric: {key}")
+        return result
 
     def keys(self):
         """

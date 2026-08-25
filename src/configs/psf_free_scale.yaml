@@ -59,6 +59,9 @@ trainer:
   override: false
   skip_oom: false
   max_grad_norm: null
+  amp:
+    enabled: false
+    dtype: bfloat16
   mask_balanced_eval: true
 
 hydra:

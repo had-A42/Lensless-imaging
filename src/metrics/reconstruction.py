@@ -16,6 +16,8 @@ def _prepare_pair(
     normalization_eps: float,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     _validate_image_pair(prediction, target)
+    prediction = prediction.float()
+    target = target.float()
     if not normalize_by_max:
         return prediction, target
     return (

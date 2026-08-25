@@ -1,3 +1,6 @@
+import math
+
+import torch
 from torchvision.utils import make_grid
 
 from src.metrics.tracker import MetricTracker
@@ -36,16 +39,46 @@ class Trainer(BaseTrainer):
             metric_funcs = self.metrics["train"]
             self.optimizer.zero_grad()
 
-        outputs = self.model(**batch)
-        batch.update(outputs)
+        with self.autocast_context():
+            outputs = self.model(**batch)
+            batch.update(outputs)
 
-        all_losses = self.criterion(**batch)
-        batch.update(all_losses)
+            all_losses = self.criterion(**batch)
+            batch.update(all_losses)
+
+        loss = batch["loss"]
+        if not isinstance(loss, torch.Tensor) or loss.numel() != 1:
+            raise TypeError("loss must be a scalar torch.Tensor")
+        if not torch.isfinite(loss.detach()).item():
+            stage = "training" if self.is_train else "evaluation"
+            raise FloatingPointError(
+                f"Non-finite total loss during {stage} "
+                f"at global_step={getattr(self, 'global_step', 0)}, "
+                f"sampler_step={getattr(self, 'sampler_step', 0)}: "
+                f"{loss.detach().item()}"
+            )
 
         if self.is_train:
-            batch["loss"].backward()  # sum of all losses is always called loss
+            grad_scaler = getattr(self, "grad_scaler", None)
+            if grad_scaler is None:
+                loss.backward()  # sum of all losses is always called loss
+            else:
+                grad_scaler.scale(loss).backward()
+                grad_scaler.unscale_(self.optimizer)
             self._clip_grad_norm()
-            self.optimizer.step()
+            grad_norm = self._get_grad_norm()
+            if not math.isfinite(grad_norm):
+                raise FloatingPointError(
+                    "Non-finite gradient norm after backward and before "
+                    f"optimizer.step at global_step={getattr(self, 'global_step', 0)}, "
+                    f"sampler_step={getattr(self, 'sampler_step', 0)}: {grad_norm}"
+                )
+            batch["grad_norm"] = grad_norm
+            if grad_scaler is None:
+                self.optimizer.step()
+            else:
+                grad_scaler.step(self.optimizer)
+                grad_scaler.update()
             if self.lr_scheduler is not None:
                 self.lr_scheduler.step()
 
@@ -80,6 +113,10 @@ class Trainer(BaseTrainer):
         # the method is called only every self.log_step steps
         if not self.config.writer.get("log_images", False):
             return
+        if mode == "train":
+            image_log_step = self.config.writer.get("image_log_step")
+            if image_log_step is not None and batch_idx % int(image_log_step) != 0:
+                return
 
         if any(key not in batch for key in ("measurement", "prediction", "target")):
             return
