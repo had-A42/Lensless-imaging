@@ -1,0 +1,43 @@
+defaults:
+  - mnist_psf_free
+  - _self_
+
+condition_name: mnist-grayscale-${scale_condition.name}
+
+protocol:
+  experiment: MNIST-CV2
+  version: corrected-v1
+  scope: matched one-channel control for the RGB simple-scene experiment
+  measurement_shape: [1, 380, 507]
+  target_shape: [1, 256, 256]
+
+datasets:
+  train:
+    channels: 1
+  validation:
+    channels: 1
+    validation_per_class: 10
+
+simulator:
+  grayscale: true
+
+model:
+  channels: 1
+
+trainer:
+  n_epochs: 4
+  epoch_len: 2500
+  total_steps: 10000
+
+dataloader_builder:
+  validation_scenes_per_mask: 100
+
+writer:
+  run_name: mnist-cv2-grayscale-seed${trainer.seed}
+  group: mnist-cv2-grayscale
+  job_type: grayscale-${scale_condition.name}
+  tags: [synthetic, psf-free, mnist, grayscale, corrected-psf]
+
+hydra:
+  run:
+    dir: outputs/train/mnist-cv2/grayscale/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}

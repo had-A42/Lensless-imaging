@@ -81,6 +81,7 @@ class Inferencer(BaseTrainer):
         self.writer = writer
         self.output_type = self.config.inferencer.get("output_type", "classification")
         self.per_image_rows = {}
+        self.saved_example_labels = {}
         if self.metrics is not None:
             self.evaluation_metrics = MetricTracker(
                 *[m.name for m in self.metrics["inference"]],
@@ -216,7 +217,14 @@ class Inferencer(BaseTrainer):
         rows = self.per_image_rows.setdefault(part, [])
         for index in range(batch_size):
             row = {"sample_index": output_offset + index}
-            for key in ("sample_id", "scene_id", "mask_id", "psf_sha256", "split"):
+            for key in (
+                "sample_id",
+                "scene_id",
+                "mask_id",
+                "psf_sha256",
+                "split",
+                "label",
+            ):
                 if key in batch:
                     row[key] = self._item(batch[key], index)
             for name, values in metric_values.items():
@@ -228,39 +236,59 @@ class Inferencer(BaseTrainer):
 
     def _save_reconstruction_examples(self, part, batch, output_offset):
         example_indices = set(self.config.inferencer.get("example_indices", []))
-        if not example_indices:
+        example_labels = set(self.config.inferencer.get("example_labels", []))
+        saved_labels = self.saved_example_labels.setdefault(part, set())
+        if not example_indices and not example_labels:
             return
 
         for index in range(batch["prediction"].shape[0]):
             output_id = output_offset + index
-            if output_id not in example_indices:
+            label = self._item(batch["label"], index) if "label" in batch else None
+            save_by_label = label in example_labels and label not in saved_labels
+            names = []
+            if output_id in example_indices:
+                names.append(f"example_{output_id:04d}")
+            if save_by_label:
+                names.append(f"label_{label}_example_{output_id:04d}")
+                saved_labels.add(label)
+            if not names:
                 continue
             output = {
                 "measurement": batch["measurement"][index].detach().cpu(),
                 "prediction": batch["prediction"][index].detach().cpu(),
                 "target": batch["target"][index].detach().cpu(),
             }
-            for key in ("sample_id", "scene_id", "mask_id", "psf_sha256", "split"):
+            for key in (
+                "sample_id",
+                "scene_id",
+                "mask_id",
+                "psf_sha256",
+                "split",
+                "label",
+            ):
                 if key in batch:
                     output[key] = self._item(batch[key], index)
-            torch.save(output, self.save_path / part / f"example_{output_id:04d}.pth")
+            for name in names:
+                torch.save(output, self.save_path / part / f"{name}.pth")
 
-            if self.writer is not None and self.config.writer.get("log_images", False):
-                self.writer.set_step(0, part)
-                self.writer.add_image(
-                    f"example_{output_id:04d}_measurement",
-                    output["measurement"].clamp(0, 1),
-                )
-                self.writer.add_image(
-                    f"example_{output_id:04d}_prediction_target",
-                    make_grid(
-                        [
-                            output["prediction"].clamp(0, 1),
-                            output["target"].clamp(0, 1),
-                        ],
-                        nrow=2,
-                    ),
-                )
+                if self.writer is not None and self.config.writer.get(
+                    "log_images", False
+                ):
+                    self.writer.set_step(0, part)
+                    self.writer.add_image(
+                        f"{name}_measurement",
+                        output["measurement"].clamp(0, 1),
+                    )
+                    self.writer.add_image(
+                        f"{name}_prediction_target",
+                        make_grid(
+                            [
+                                output["prediction"].clamp(0, 1),
+                                output["target"].clamp(0, 1),
+                            ],
+                            nrow=2,
+                        ),
+                    )
 
     def _save_reconstruction_results(self, part, elapsed_seconds):
         rows = self.per_image_rows.get(part, [])
@@ -299,6 +327,21 @@ class Inferencer(BaseTrainer):
             name: (float(per_mask[f"{name}_mean"].std()) if len(per_mask) > 1 else None)
             for name in metric_names
         }
+        per_class = None
+        class_macro = None
+        if "label" in per_image:
+            per_class = per_image.groupby("label", sort=True).agg(
+                sample_count=("sample_index", "count"),
+                **{
+                    f"{name}_{stat}": (name, stat)
+                    for name in metric_names
+                    for stat in ("mean", "std")
+                },
+            )
+            per_class = per_class.reset_index()
+            class_macro = {
+                name: float(per_class[f"{name}_mean"].mean()) for name in metric_names
+            }
         model_load_seconds = float(getattr(self.model, "load_seconds", 0.0))
         inference_seconds = max(elapsed_seconds - model_load_seconds, 1e-12)
         summary = {
@@ -319,6 +362,16 @@ class Inferencer(BaseTrainer):
             ),
             "checkpoint_sha256": getattr(self.model, "checkpoint_sha256", None),
         }
+        if per_class is not None:
+            summary.update(
+                {
+                    "class_count": len(per_class),
+                    "samples_per_class": sorted(
+                        per_class["sample_count"].unique().tolist()
+                    ),
+                    "class_macro": class_macro,
+                }
+            )
         if self.config.get("provenance") is not None:
             summary["provenance"] = OmegaConf.to_container(
                 self.config.provenance,
@@ -329,6 +382,8 @@ class Inferencer(BaseTrainer):
         output_dir = self.save_path / part
         per_image.to_csv(output_dir / "per_image.csv", index=False)
         per_mask.to_csv(output_dir / "per_mask.csv", index=False)
+        if per_class is not None:
+            per_class.to_csv(output_dir / "per_class.csv", index=False)
         with (output_dir / "summary.json").open("w") as file:
             json.dump(summary, file, indent=2)
 
@@ -341,6 +396,13 @@ class Inferencer(BaseTrainer):
                     for name, value in mask_balanced.items()
                 }
             )
+            if class_macro is not None:
+                self.writer.add_scalars(
+                    {
+                        f"{name}_class_macro": value
+                        for name, value in class_macro.items()
+                    }
+                )
             self.writer.add_scalar("end_to_end_seconds", elapsed_seconds)
             self.writer.add_scalar("model_load_seconds", model_load_seconds)
             self.writer.add_scalar("inference_seconds", inference_seconds)
@@ -348,6 +410,8 @@ class Inferencer(BaseTrainer):
             self.writer.add_scalar("peak_vram_bytes", summary["peak_vram_bytes"])
             self.writer.add_table("per_image", per_image)
             self.writer.add_table("per_mask", per_mask)
+            if per_class is not None:
+                self.writer.add_table("per_class", per_class)
 
         return summary
 
@@ -371,6 +435,18 @@ class Inferencer(BaseTrainer):
                 f"{scenes_per_mask}, but inference produced "
                 f"{summary['samples_per_mask']}"
             )
+
+        class_checks = {
+            "expected_classes": summary.get("class_count"),
+            "expected_samples_per_class": summary.get("samples_per_class"),
+        }
+        for name, actual in class_checks.items():
+            value = expected.get(name)
+            if value is None:
+                continue
+            expected_value = [int(value)] if name.endswith("per_class") else int(value)
+            if actual != expected_value:
+                raise ValueError(f"{name} is {value}, but inference produced {actual}")
 
     def _inference_part(self, part, dataloader):
         """

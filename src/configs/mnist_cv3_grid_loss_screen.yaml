@@ -1,0 +1,28 @@
+defaults:
+  - mnist_cv2_grayscale
+  - _self_
+
+protocol:
+  experiment: MNIST-CV3
+  scope: minimal sensor-grid structure loss ablation
+
+mnist_loss_function:
+  full_ssim_weight: 0.1
+
+trainer:
+  n_epochs: 2
+  epoch_len: 1000
+  total_steps: 2000
+
+lr_scheduler:
+  T_max: ${trainer.total_steps}
+
+writer:
+  run_name: mnist-cv3-dice-ssim01-seed${trainer.seed}
+  group: mnist-cv3-grid-loss-screen
+  job_type: dice-plus-ssim01
+  tags: [synthetic, psf-free, mnist, grayscale, corrected-psf, loss-ablation]
+
+hydra:
+  run:
+    dir: outputs/train/mnist-cv3/dice-ssim01/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}

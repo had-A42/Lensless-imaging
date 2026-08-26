@@ -1,0 +1,70 @@
+defaults:
+  - model: psf_free_drunet
+  - writer: wandb_lensless
+  - metrics: mnist_reconstruction
+  - datasets: mnist_on_the_fly
+  - dataloader_builder: digicam_validation
+  - simulator: digicam_article
+  - _self_
+
+protocol:
+  experiment: MNIST-CV1
+  version: corrected-v1
+  measurement_shape: [3, 380, 507]
+  target_shape: [3, 256, 256]
+  roi: [62, 125, 256, 256]
+  representation: 32x32 padded MNIST with 8x8 superpixels
+
+provenance:
+  checkpoint_sha256: null
+  evaluation_mask_seed: ${dataloader_builder.evaluation_mask_seed}
+  validation_seed: ${dataloader_builder.validation_seed}
+  expected_samples: 3200
+  expected_masks: 32
+  expected_scenes_per_mask: 100
+  expected_classes: 10
+  expected_samples_per_class: 320
+
+datasets:
+  validation:
+    validation_per_class: 10
+
+dataloader_builder:
+  validation_scenes_per_mask: 100
+  target_size: [256, 256]
+  roi: ${protocol.roi}
+
+model:
+  output_crop: ${protocol.roi}
+  output_normalization: min_max
+
+metrics:
+  device: ${inferencer.device}
+
+inferencer:
+  device_tensors: [measurement, target]
+  device: auto
+  seed: 42
+  output_type: reconstruction
+  save_dir: saved
+  save_path: mnist-cv1-eval
+  from_pretrained: ${oc.env:MNIST_CHECKPOINT,null}
+  skip_model_load: false
+  override: false
+  example_indices: []
+  example_labels: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+writer:
+  run_name: mnist-cv1-eval-seed${inferencer.seed}
+  group: mnist-cv1-corrected-eval
+  job_type: checkpoint-evaluation
+  tags: [synthetic, psf-free, mnist, corrected-psf, evaluation]
+  loss_names: []
+  log_checkpoints: false
+  log_best_checkpoint_at_end: false
+  save_code: false
+  log_git_state: false
+
+hydra:
+  run:
+    dir: outputs/inference/mnist-cv1/${now:%Y-%m-%d_%H-%M-%S}
