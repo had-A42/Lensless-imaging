@@ -87,6 +87,15 @@ def _aligned_measurement(target, psf, convolver, roi, quantize):
     return measurement.squeeze(0).movedim(-1, 0).contiguous()
 
 
+def _prepare_convolution_psf(psf):
+    psf = torch.as_tensor(np.asarray(psf), dtype=torch.float32)
+    if psf.ndim != 4 or psf.shape[0] != 1:
+        raise ValueError("psf must have DHWC shape with depth 1")
+
+    psf = torch.flip(psf, dims=(-3, -2))
+    return psf / psf.norm().clamp_min(1e-12)
+
+
 class DigiCamOnTheFlyDataset:
     def __init__(
         self,
@@ -191,9 +200,7 @@ class DigiCamOnTheFlyDataset:
             return self.current_convolver
 
         self.current_convolver_seed = seed
-        self.current_convolver = RealFFTConvolve2D(
-            psf=torch.as_tensor(np.asarray(psf), dtype=torch.float32)
-        )
+        self.current_convolver = RealFFTConvolve2D(psf=_prepare_convolution_psf(psf))
         return self.current_convolver
 
     def __getitem__(self, request):

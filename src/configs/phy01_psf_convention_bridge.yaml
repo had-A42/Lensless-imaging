@@ -1,0 +1,18 @@
+defaults:
+  - e01_mask_diversity_screen
+  - override scale_condition: finite_100
+  - _self_
+
+protocol:
+  version: corrected-v1
+  psf_convention: lensless AdafruitLCD spatial flip and L2 normalization
+
+writer:
+  run_name: phy01-corrected-${condition_name}-seed${trainer.seed}
+  group: psf-convention-phy01
+  job_type: corrected-${condition_name}
+  tags: [synthetic, psf-free, article-resolution, phy01, corrected-psf]
+
+hydra:
+  run:
+    dir: outputs/train/phy01/corrected-${condition_name}/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}
