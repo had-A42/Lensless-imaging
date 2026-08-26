@@ -1,0 +1,37 @@
+defaults:
+  - cross_mask_ssl_profile
+  - _self_
+
+condition_name: finite-2-overfit
+mask_count: 2
+
+protocol:
+  stage: one-pair-overfit
+  train_masks: 2
+  scenes_per_step: 1
+  scene_exposures: 250
+  measurement_forwards: 500
+
+trainer:
+  n_epochs: 1
+  epoch_len: 250
+  total_steps: 250
+  save_period: 1
+  keep_last_checkpoints: 1
+
+lr_scheduler:
+  T_max: ${trainer.total_steps}
+
+dataloader_builder:
+  batch_size: 1
+  paired_scene_count: 1
+  cross_validation_steps: 1
+
+writer:
+  run_name: cross-mask-ssl-overfit-seed${trainer.seed}
+  job_type: overfit-gate
+  log_images: true
+
+hydra:
+  run:
+    dir: outputs/train/cross-mask-ssl-overfit/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}

@@ -209,7 +209,24 @@ class PSFFreeDRUNet(nn.Module):
         ):
             raise ValueError("measurement values must be in [0, 1]")
 
-    def forward(self, measurement: Tensor, **batch: Tensor) -> dict[str, Tensor]:
+    def _network_forward(self, network_input: Tensor) -> tuple[Tensor, Tensor]:
+        x1 = self.network.m_head(network_input)
+        x2 = self.network.m_down1(x1)
+        x3 = self.network.m_down2(x2)
+        x4 = self.network.m_down3(x3)
+        feature = self.network.m_body(x4)
+        feature = self.network.m_up3(feature + x4)
+        feature = self.network.m_up2(feature + x3)
+        feature = self.network.m_up1(feature + x2)
+        feature = feature + x1
+        return self.network.m_tail(feature), feature
+
+    def forward(
+        self,
+        measurement: Tensor,
+        return_features: bool = False,
+        **batch: Tensor,
+    ) -> dict[str, Tensor]:
         del batch
         self._validate_measurement(measurement)
 
@@ -236,8 +253,9 @@ class PSFFreeDRUNet(nn.Module):
         )
         network_input = torch.cat((normalized, noise_map), dim=1)
 
-        prediction = self.network(network_input)
+        prediction, feature = self._network_forward(network_input)
         prediction = prediction[..., top : top + height, left : left + width]
+        feature = feature[..., top : top + height, left : left + width]
 
         if self.output_crop is not None:
             crop_top, crop_left, crop_height, crop_width = self.output_crop
@@ -254,6 +272,11 @@ class PSFFreeDRUNet(nn.Module):
                     crop_top:crop_bottom,
                     crop_left:crop_right,
                 ]
+            feature = feature[
+                ...,
+                crop_top:crop_bottom,
+                crop_left:crop_right,
+            ]
 
         if self.output_normalization == "positive_max":
             prediction = prediction.clamp_min(0.0) * scale
@@ -278,7 +301,10 @@ class PSFFreeDRUNet(nn.Module):
                 crop_top:crop_bottom,
                 crop_left:crop_right,
             ]
-        return {"prediction": prediction}
+        output = {"prediction": prediction}
+        if return_features:
+            output["features"] = feature
+        return output
 
 
 __all__ = [

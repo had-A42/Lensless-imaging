@@ -267,6 +267,11 @@ class BaseTrainer:
         self.train_metrics.reset()
         self.writer.set_step(self.global_step)
         self.writer.add_scalar("epoch", epoch)
+        uses_cuda = (
+            torch.cuda.is_available() and torch.device(self.device).type == "cuda"
+        )
+        if uses_cuda:
+            torch.cuda.reset_peak_memory_stats()
         train_start = time.perf_counter()
         for batch_idx, batch in enumerate(
             tqdm(self.train_dataloader, desc="train", total=self.epoch_len)
@@ -329,6 +334,16 @@ class BaseTrainer:
             if total_seconds
             else 0.0,
         }
+        if uses_cuda:
+            gibibyte = 1024**3
+            timing.update(
+                {
+                    "peak_memory_allocated_gib": torch.cuda.max_memory_allocated()
+                    / gibibyte,
+                    "peak_memory_reserved_gib": torch.cuda.max_memory_reserved()
+                    / gibibyte,
+                }
+            )
         logs.update(timing)
         self.writer.set_step(self.global_step)
         for name, value in timing.items():
@@ -349,7 +364,13 @@ class BaseTrainer:
         """
         self.is_train = False
         self.model.eval()
-        self.evaluation_metrics.reset()
+        metric_tracker = self.evaluation_metrics
+        if part == "cross_validation":
+            metric_tracker = MetricTracker(
+                *self.config.writer.loss_names,
+                writer=self.writer,
+            )
+        metric_tracker.reset()
         per_mask_rows = []
         with torch.no_grad():
             for batch_idx, batch in tqdm(
@@ -359,7 +380,7 @@ class BaseTrainer:
             ):
                 batch = self.process_batch(
                     batch,
-                    metrics=self.evaluation_metrics,
+                    metrics=metric_tracker,
                 )
                 mask_ids = batch.get("mask_id")
                 metric_values = batch.get("metric_values")
@@ -379,12 +400,12 @@ class BaseTrainer:
                         }
                     )
             self.writer.set_step(self.global_step, part)
-            self._log_scalars(self.evaluation_metrics)
+            self._log_scalars(metric_tracker)
             self._log_batch(
                 batch_idx, batch, part
             )  # log only the last batch during inference
 
-        result = self.evaluation_metrics.result()
+        result = metric_tracker.result()
         if per_mask_rows:
             table = _aggregate_per_mask_rows(per_mask_rows)
             table.to_csv(
@@ -464,9 +485,27 @@ class BaseTrainer:
             batch (dict): dict-based batch containing the data from
                 the dataloader with some of the tensors on the device.
         """
-        for tensor_for_device in self.cfg_trainer.device_tensors:
+        for tensor_for_device in self.device_tensor_names(batch):
             batch[tensor_for_device] = batch[tensor_for_device].to(self.device)
         return batch
+
+    def device_tensor_names(self, batch=None):
+        device_tensors = self.cfg_trainer.device_tensors
+        required = getattr(self.cfg_trainer, "required_device_tensors", None)
+        if required is not None:
+            paired_names = list(required["train"])
+            stage = (
+                "train"
+                if batch is not None and all(name in batch for name in paired_names)
+                else "inference"
+            )
+            device_tensors = required[stage]
+        names = list(device_tensors)
+        if batch is not None:
+            missing = [name for name in names if name not in batch]
+            if missing:
+                raise KeyError(f"batch is missing configured device tensors: {missing}")
+        return names
 
     def transform_batch(self, batch):
         """

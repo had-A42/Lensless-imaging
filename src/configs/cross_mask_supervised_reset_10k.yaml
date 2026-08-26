@@ -1,0 +1,20 @@
+defaults:
+  - cross_mask_ssl_finetune
+  - _self_
+
+protocol:
+  stage: supervised-control-stage-2
+  initialization: supervised-10k
+  optimizer_schedule: reset-at-10k
+
+trainer:
+  from_pretrained: ${oc.env:CROSS_MASK_SUPERVISED_CHECKPOINT,missing-cross-mask-supervised-checkpoint}
+
+writer:
+  run_name: cross-mask-supervised-reset10-${condition_name}-seed${trainer.seed}
+  job_type: supervised-10k-control-stage-2
+  tags: [synthetic, psf-free, article-resolution, ssl-control, supervised, optimizer-reset]
+
+hydra:
+  run:
+    dir: outputs/train/cross-mask-supervised-reset10/${condition_name}/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}

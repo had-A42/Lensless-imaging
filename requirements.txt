@@ -12,6 +12,7 @@ einops==0.8.1
 datasets
 huggingface_hub==0.36.2
 transformers==4.56.2
+diffusers==0.35.2
 
 black
 isort

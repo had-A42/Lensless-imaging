@@ -34,7 +34,8 @@ class Trainer(BaseTrainer):
         batch = self.move_batch_to_device(batch)
         batch = self.transform_batch(batch)  # transform batch on device -- faster
 
-        metric_funcs = self.metrics["inference"]
+        paired_batch = "measurement_a" in batch and "measurement_b" in batch
+        metric_funcs = [] if paired_batch else self.metrics["inference"]
         if self.is_train:
             metric_funcs = self.metrics["train"]
             self.optimizer.zero_grad()
@@ -82,7 +83,7 @@ class Trainer(BaseTrainer):
             if self.lr_scheduler is not None:
                 self.lr_scheduler.step()
 
-        batch_size = batch[self.cfg_trainer.device_tensors[0]].shape[0]
+        batch_size = batch[self.device_tensor_names(batch)[0]].shape[0]
 
         # update metrics for each loss (in case of multiple losses)
         for loss_name in self.config.writer.loss_names:

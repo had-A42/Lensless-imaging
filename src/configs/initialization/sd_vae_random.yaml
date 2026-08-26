@@ -1,0 +1,3 @@
+name: random
+local_snapshot_path: ${oc.env:SD_VAE_SNAPSHOT,null}
+pretrained: false

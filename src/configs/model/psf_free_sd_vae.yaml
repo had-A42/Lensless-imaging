@@ -1,0 +1,7 @@
+_target_: src.model.PSFFreeAutoencoderKL
+
+local_snapshot_path: null
+pretrained: false
+channels: 3
+pad_multiple: 8
+output_crop: [80, 100, 200, 266]

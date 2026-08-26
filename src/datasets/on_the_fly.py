@@ -131,8 +131,7 @@ class DigiCamOnTheFlyDataset:
         self.mask_cache = OrderedDict()
         self.current_mask_seed = None
         self.current_mask = None
-        self.current_convolver_seed = None
-        self.current_convolver = None
+        self.convolver_cache = OrderedDict()
 
         for name, size in (
             ("measurement_size", self.measurement_size),
@@ -196,16 +195,22 @@ class DigiCamOnTheFlyDataset:
         self.current_mask = None
 
     def _get_convolver(self, seed, psf):
-        if seed == self.current_convolver_seed:
-            return self.current_convolver
+        if seed in self.convolver_cache:
+            convolver = self.convolver_cache.pop(seed)
+            self.convolver_cache[seed] = convolver
+            return convolver
 
-        self.current_convolver_seed = seed
-        self.current_convolver = RealFFTConvolve2D(psf=_prepare_convolution_psf(psf))
-        return self.current_convolver
+        convolver = RealFFTConvolve2D(psf=_prepare_convolution_psf(psf))
+        self.convolver_cache[seed] = convolver
+        while len(self.convolver_cache) > 2:
+            self.convolver_cache.popitem(last=False)
+        return convolver
 
     def __getitem__(self, request):
         if not isinstance(request, dict):
             raise TypeError("on-the-fly dataset expects a sampler request")
+        if request.get("paired", False):
+            return self._paired_item(request)
 
         scene = self.scenes[int(request["scene_index"])]
         psf, simulator, _ = self._get_mask(request)
@@ -247,7 +252,43 @@ class DigiCamOnTheFlyDataset:
         }
         if "label" in scene:
             sample["label"] = scene["label"]
+        if request.get("return_psf", False):
+            sample["psf"] = (
+                _prepare_convolution_psf(psf).squeeze(0).movedim(-1, 0).contiguous()
+            )
         return sample
+
+    def _paired_item(self, request):
+        views = {}
+        for view in ("a", "b"):
+            view_request = {
+                "scene_index": request["scene_index"],
+                "mask_id": request[f"mask_id_{view}"],
+                "mask_seed": request[f"mask_seed_{view}"],
+                "sample_seed": request[f"sample_seed_{view}"],
+                "step": request["step"],
+                "mode": request["mode"],
+                "return_psf": True,
+            }
+            views[view] = self.__getitem__(view_request)
+
+        if views["a"]["scene_id"] != views["b"]["scene_id"]:
+            raise RuntimeError("paired views must use the same scene")
+        return {
+            "measurement_a": views["a"]["measurement"],
+            "measurement_b": views["b"]["measurement"],
+            "psf_a": views["a"]["psf"],
+            "psf_b": views["b"]["psf"],
+            "scene_id": views["a"]["scene_id"],
+            "source_index": views["a"]["source_index"],
+            "mask_id_a": views["a"]["mask_id"],
+            "mask_id_b": views["b"]["mask_id"],
+            "mask_seed_a": views["a"]["mask_seed"],
+            "mask_seed_b": views["b"]["mask_seed"],
+            "step": views["a"]["step"],
+            "split": views["a"]["split"],
+            "mode": views["a"]["mode"],
+        }
 
 
 class DigiCamMaskBatchSampler:
@@ -328,6 +369,80 @@ class DigiCamMaskBatchSampler:
                     "sample_seed": _sample_seed(self.run_seed, position, slot),
                     "step": position,
                     "mode": self.mode,
+                }
+                for slot, scene_index in enumerate(scene_indices)
+            ]
+
+
+class DigiCamPairedMaskBatchSampler:
+    def __init__(
+        self,
+        scene_count,
+        batch_size,
+        steps,
+        run_seed,
+        mask_records,
+        rank=0,
+        world_size=1,
+    ):
+        self.scene_count = int(scene_count)
+        self.batch_size = int(batch_size)
+        self.steps = int(steps)
+        self.run_seed = int(run_seed)
+        self.mask_records = list(mask_records)
+        self.rank = int(rank)
+        self.world_size = int(world_size)
+        self.start_step = 0
+
+        if self.scene_count < self.batch_size or self.batch_size <= 0:
+            raise ValueError("scene_count must be at least batch_size")
+        if self.steps <= 0:
+            raise ValueError("steps must be positive")
+        if len(self.mask_records) < 2:
+            raise ValueError("paired training needs at least two masks")
+        if not 0 <= self.rank < self.world_size:
+            raise ValueError("rank must be inside world_size")
+
+    def __len__(self):
+        return self.steps - self.start_step
+
+    def set_start_step(self, step):
+        step = int(step)
+        if step < 0 or step > self.steps:
+            raise ValueError(f"start step must be within [0, {self.steps}]")
+        self.start_step = step
+
+    def __iter__(self):
+        for step in range(self.start_step, self.steps):
+            position = step * self.world_size + self.rank
+            mask_rng = np.random.default_rng(
+                np.random.SeedSequence([self.run_seed, position, 71])
+            )
+            mask_indices = mask_rng.choice(
+                len(self.mask_records), size=2, replace=False
+            )
+            mask_a, mask_b = (self.mask_records[int(index)] for index in mask_indices)
+
+            scene_rng = np.random.default_rng(
+                np.random.SeedSequence([self.run_seed, position, 43])
+            )
+            scene_indices = scene_rng.choice(
+                self.scene_count, size=self.batch_size, replace=False
+            )
+            yield [
+                {
+                    "paired": True,
+                    "scene_index": int(scene_index),
+                    "mask_id_a": mask_a["mask_id"],
+                    "mask_seed_a": int(mask_a["mask_seed"]),
+                    "mask_id_b": mask_b["mask_id"],
+                    "mask_seed_b": int(mask_b["mask_seed"]),
+                    "sample_seed_a": _sample_seed(self.run_seed, position, 2 * slot),
+                    "sample_seed_b": _sample_seed(
+                        self.run_seed, position, 2 * slot + 1
+                    ),
+                    "step": position,
+                    "mode": "finite",
                 }
                 for slot, scene_index in enumerate(scene_indices)
             ]
@@ -421,6 +536,9 @@ def build_on_the_fly_dataloaders(
     validation_scenes=None,
     mask_factory=None,
     evaluation_only=False,
+    paired_train=False,
+    paired_scene_count=None,
+    cross_validation_steps=0,
 ):
     if train_mask_seed is None:
         train_mask_seed = base_mask_seed
@@ -484,8 +602,23 @@ def build_on_the_fly_dataloaders(
         generator=validation_generator,
         **loader_args,
     )
+    dataloaders = {"validation": validation_loader}
+    if int(cross_validation_steps) > 0:
+        cross_validation_sampler = DigiCamPairedMaskBatchSampler(
+            scene_count=len(validation_scenes),
+            batch_size=batch_size,
+            steps=int(cross_validation_steps),
+            run_seed=validation_seed,
+            mask_records=validation_records,
+        )
+        dataloaders["cross_validation"] = DataLoader(
+            validation_dataset,
+            batch_sampler=cross_validation_sampler,
+            generator=torch.Generator().manual_seed(int(validation_seed)),
+            **loader_args,
+        )
     if evaluation_only:
-        return {"validation": validation_loader}, {}
+        return dataloaders, {}
 
     if train_mode is None or train_steps is None:
         raise ValueError("training needs train_mode and train_steps")
@@ -514,22 +647,38 @@ def build_on_the_fly_dataloaders(
     )
     if train_dataset.psf_cache.warmup and train_records is not None:
         train_dataset.warmup_psf_cache(train_records)
-    train_sampler = DigiCamMaskBatchSampler(
-        scene_count=len(train_scenes),
-        batch_size=batch_size,
-        steps=train_steps,
-        run_seed=run_seed,
-        mode=train_mode,
-        mask_records=train_records,
-        infinite_base_seed=train_mask_seed,
-    )
+    if paired_train:
+        if train_mode != "finite":
+            raise ValueError("paired training currently requires finite masks")
+        if simulation_mode != "roi_convolution":
+            raise ValueError("paired training currently requires roi_convolution")
+        paired_scene_count = (
+            len(train_scenes) if paired_scene_count is None else int(paired_scene_count)
+        )
+        if not 0 < paired_scene_count <= len(train_scenes):
+            raise ValueError("paired_scene_count must be within the train split")
+        train_sampler = DigiCamPairedMaskBatchSampler(
+            scene_count=paired_scene_count,
+            batch_size=batch_size,
+            steps=train_steps,
+            run_seed=run_seed,
+            mask_records=train_records,
+        )
+    else:
+        train_sampler = DigiCamMaskBatchSampler(
+            scene_count=len(train_scenes),
+            batch_size=batch_size,
+            steps=train_steps,
+            run_seed=run_seed,
+            mode=train_mode,
+            mask_records=train_records,
+            infinite_base_seed=train_mask_seed,
+        )
     train_generator = torch.Generator().manual_seed(int(run_seed))
-    return {
-        "train": DataLoader(
-            train_dataset,
-            batch_sampler=train_sampler,
-            generator=train_generator,
-            **loader_args,
-        ),
-        "validation": validation_loader,
-    }, {}
+    dataloaders["train"] = DataLoader(
+        train_dataset,
+        batch_sampler=train_sampler,
+        generator=train_generator,
+        **loader_args,
+    )
+    return dataloaders, {}

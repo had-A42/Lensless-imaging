@@ -1,0 +1,17 @@
+_target_: src.model.PSFFreeCrossMaskSSL
+
+reconstructor:
+  _target_: src.model.PSFFreeDRUNet
+  channels: 3
+  nc: [32, 64, 128, 256]
+  depth: 4
+  noise_level: 1.0
+  trainable_noise_level: true
+  output_crop: [80, 100, 200, 266]
+  output_normalization: positive_max
+
+feature_channels: 32
+projector_hidden_channels: 256
+embedding_channels: 64
+spatial_cells: 4
+projector_seed: 52

@@ -1,0 +1,34 @@
+defaults:
+  - cross_mask_ssl_screen
+  - _self_
+
+protocol:
+  stage: profile-100
+  scene_exposures: 800
+  measurement_forwards: 1600
+
+trainer:
+  n_epochs: 1
+  epoch_len: 100
+  total_steps: 100
+  monitor: "off"
+  save_period: 999999
+
+lr_scheduler:
+  T_max: ${trainer.total_steps}
+
+dataloader_builder:
+  validation_mask_count: 2
+  validation_scenes_per_mask: 4
+  cross_validation_steps: 4
+
+writer:
+  run_name: cross-mask-ssl-profile-seed${trainer.seed}
+  job_type: profile
+  log_images: false
+  log_checkpoints: false
+  log_best_checkpoint_at_end: false
+
+hydra:
+  run:
+    dir: outputs/train/cross-mask-ssl-profile/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}
