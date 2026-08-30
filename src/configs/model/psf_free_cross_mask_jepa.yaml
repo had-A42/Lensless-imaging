@@ -1,4 +1,4 @@
-_target_: src.model.psf_free_cross_mask_ssl.PSFFreeCrossMaskSSL
+_target_: src.model.psf_free_cross_mask_jepa.PSFFreeCrossMaskJEPA
 
 reconstructor:
   _target_: src.model.psf_free_drunet.PSFFreeDRUNet
@@ -11,9 +11,11 @@ reconstructor:
   output_normalization: positive_max
 
 feature_channels: 32
-projector_hidden_channels: 256
-# With the scientific gate batch size B=8, sample covariance has rank at most 7.
-# D=4 makes the VICReg covariance objective identifiable without raising VRAM.
-embedding_channels: 4
+embedding_channels: 8
+predictor_hidden_channels: 64
+predictor_heads: 2
+predictor_layers: 2
 spatial_cells: 4
+target_fraction: 0.5
+momentum: 0.996
 projector_seed: 52

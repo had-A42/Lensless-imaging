@@ -1,0 +1,73 @@
+defaults:
+  - e02_mask_scaling_screen
+  - override scale_condition: finite_100
+  - override model: psf_free_cross_mask_jepa
+  - _self_
+
+protocol:
+  experiment: SSL-CROSS-MASK-JEPA-01
+  scope: target-free masked latent prediction across camera masks with variance stabilization
+  train_masks: 100
+  scenes_per_step: 8
+  views_per_scene: 2
+  scene_exposures: 80000
+  measurement_forwards: 160000
+
+loss_function:
+  _target_: src.loss.cross_mask_jepa.CrossMaskJEPALoss
+  collapse_threshold: 0.1
+  variance_weight: 1.0
+  covariance_weight: 0.01
+  variance_epsilon: 1.0e-4
+  mse_weight: 1.0
+  lpips_weight: 1.0
+  lpips_net: vgg
+
+metrics:
+  train: []
+
+trainer:
+  monitor: "off"
+  save_initial_checkpoint: true
+  save_period: 4
+  keep_last_checkpoints: 1
+  required_device_tensors:
+    train: [measurement_a, measurement_b]
+    inference: [measurement, target]
+  amp:
+    enabled: true
+    dtype: bfloat16
+
+dataloader_builder:
+  paired_train: true
+  batch_size: 8
+  cross_validation_steps: 32
+  psf_cache:
+    mode: read_write
+    warmup: true
+
+writer:
+  run_name: cross-mask-jepa-${condition_name}-seed${trainer.seed}
+  group: cross-mask-jepa-01
+  job_type: latent-pretraining
+  log_best_checkpoint_at_end: false
+  tags: [synthetic, psf-free, article-resolution, ssl, cross-mask, jepa]
+  loss_names:
+    - loss
+    - jepa_ab_loss
+    - jepa_ba_loss
+    - variance_loss
+    - covariance_loss
+    - online_embedding_std
+    - prediction_cosine
+    - target_embedding_std
+    - target_collapsed_fraction
+    - target_effective_rank
+    - scene_retrieval_accuracy
+    - scene_alignment_margin
+    - mse_loss
+    - lpips_loss
+
+hydra:
+  run:
+    dir: outputs/train/cross-mask-jepa/${condition_name}/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}

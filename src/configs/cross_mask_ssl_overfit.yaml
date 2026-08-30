@@ -6,7 +6,7 @@ condition_name: finite-2-overfit
 mask_count: 2
 
 protocol:
-  stage: one-pair-overfit
+  stage: one-pair-physics-overfit
   train_masks: 2
   scenes_per_step: 1
   scene_exposures: 250
@@ -26,6 +26,11 @@ dataloader_builder:
   batch_size: 1
   paired_scene_count: 1
   cross_validation_steps: 1
+
+# Scene-level variance/covariance and negative-pair diagnostics are undefined
+# for a one-scene batch.  This gate checks only reconstruction/physics behavior.
+loss_function:
+  vicreg_weight: 0.0
 
 writer:
   run_name: cross-mask-ssl-overfit-seed${trainer.seed}

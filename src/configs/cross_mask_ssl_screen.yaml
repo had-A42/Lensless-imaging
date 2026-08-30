@@ -31,6 +31,12 @@ metrics:
   train: []
 
 trainer:
+  # Clean validation is development-only.  It must not select the SSL
+  # checkpoint, otherwise pretraining is no longer strictly target-free.
+  monitor: "off"
+  save_initial_checkpoint: true
+  save_period: 4
+  keep_last_checkpoints: 1
   required_device_tensors:
     train: [measurement_a, measurement_b, psf_a, psf_b]
     inference: [measurement, target]
@@ -50,11 +56,16 @@ writer:
   run_name: cross-mask-ssl-${condition_name}-seed${trainer.seed}
   group: cross-mask-ssl-01
   job_type: physics-pretraining
+  log_best_checkpoint_at_end: false
   tags: [synthetic, psf-free, article-resolution, ssl, cross-mask, physics]
   loss_names:
     - loss
     - self_loss
     - cross_loss
+    - shuffled_scene_loss
+    - shuffled_scene_margin
+    - wrong_psf_loss
+    - wrong_psf_margin
     - view_loss
     - vicreg_loss
     - invariance_loss
@@ -63,6 +74,15 @@ writer:
     - embedding_std
     - collapsed_fraction
     - effective_rank
+    - scene_embedding_std
+    - scene_collapsed_fraction
+    - scene_effective_rank
+    - scene_retrieval_accuracy
+    - scene_alignment_margin
+    - scene_diagnostics_available
+    - output_total_variation
+    - output_dynamic_range
+    - output_channel_spread
     - mse_loss
     - lpips_loss
 

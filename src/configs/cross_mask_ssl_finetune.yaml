@@ -14,8 +14,12 @@ protocol:
   scene_exposures: 80000
 
 loss_function:
-  _target_: src.loss.CrossMaskPhysicsLoss
-  roi: [80, 100, 200, 266]
+  _target_: src.loss.ReconstructionLoss
+  mse_weight: 1.0
+  ssim_weight: 0.0
+  lpips_weight: 1.0
+  lpips_net: vgg
+  normalize_by_max: true
 
 trainer:
   from_pretrained: ${oc.env:CROSS_MASK_SSL_CHECKPOINT,missing-cross-mask-ssl-checkpoint}
@@ -23,7 +27,7 @@ trainer:
   epoch_len: 2500
   total_steps: 10000
   required_device_tensors:
-    train: [measurement_a, measurement_b, psf_a, psf_b]
+    train: [measurement, target]
     inference: [measurement, target]
   amp:
     enabled: true
@@ -33,28 +37,16 @@ lr_scheduler:
   T_max: ${trainer.total_steps}
 
 dataloader_builder:
+  paired_train: false
   batch_size: ${protocol.batch_size}
-  cross_validation_steps: 32
+  cross_validation_steps: 0
 
 writer:
   run_name: cross-mask-ssl-finetune-${condition_name}-seed${trainer.seed}
   group: cross-mask-ssl-01
   job_type: supervised-finetune
   tags: [synthetic, psf-free, article-resolution, ssl, cross-mask, finetune]
-  loss_names:
-    - loss
-    - self_loss
-    - cross_loss
-    - view_loss
-    - vicreg_loss
-    - invariance_loss
-    - variance_loss
-    - covariance_loss
-    - embedding_std
-    - collapsed_fraction
-    - effective_rank
-    - mse_loss
-    - lpips_loss
+  loss_names: [loss, mse_loss, lpips_loss]
 
 hydra:
   run:

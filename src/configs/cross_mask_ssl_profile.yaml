@@ -12,7 +12,8 @@ trainer:
   epoch_len: 100
   total_steps: 100
   monitor: "off"
-  save_period: 999999
+  # Preserve the exact final-step state for the evaluation-only gate.
+  save_period: 1
 
 lr_scheduler:
   T_max: ${trainer.total_steps}

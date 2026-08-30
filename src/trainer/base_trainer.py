@@ -26,6 +26,13 @@ def _validate_iteration_budget(n_epochs, epoch_len, total_steps):
         )
 
 
+def _validate_evaluation_period(evaluation_period, n_epochs):
+    evaluation_period = int(evaluation_period)
+    if evaluation_period < 1 or evaluation_period > int(n_epochs):
+        raise ValueError("evaluation_period must be in 1..n_epochs")
+    return evaluation_period
+
+
 def _aggregate_per_mask_rows(rows):
     batches = pd.DataFrame(rows)
     metric_names = [
@@ -133,6 +140,9 @@ class BaseTrainer:
         self._last_epoch = 0  # required for saving on interruption
         self.start_epoch = 1
         self.epochs = self.cfg_trainer.n_epochs
+        self.evaluation_period = _validate_evaluation_period(
+            self.cfg_trainer.get("evaluation_period", 1), self.epochs
+        )
         _validate_iteration_budget(
             self.epochs,
             epoch_len,
@@ -227,6 +237,12 @@ class BaseTrainer:
         and monitoring the performance improvement (for early stopping
         and saving the best checkpoint).
         """
+        if (
+            self.cfg_trainer.get("save_initial_checkpoint", False)
+            and self.start_epoch == 1
+            and self.cfg_trainer.get("resume_from") is None
+        ):
+            self._save_initial_checkpoint()
         for epoch in range(self.start_epoch, self.epochs + 1):
             self._last_epoch = epoch
             result = self._train_epoch(epoch)
@@ -241,9 +257,14 @@ class BaseTrainer:
 
             # evaluate model performance according to configured metric,
             # save best checkpoint as model_best
-            best, stop_process, self.not_improved_count = self._monitor_performance(
-                logs, self.not_improved_count
-            )
+            period = getattr(self, "evaluation_period", 1)
+            should_evaluate = epoch % period == 0 or epoch == self.epochs
+            if should_evaluate:
+                best, stop_process, self.not_improved_count = self._monitor_performance(
+                    logs, self.not_improved_count
+                )
+            else:
+                best, stop_process = False, False
 
             if epoch % self.save_period == 0 or best:
                 self._save_checkpoint(epoch, save_best=best, only_best=True)
@@ -318,21 +339,25 @@ class BaseTrainer:
         train_seconds = time.perf_counter() - train_start
 
         # Run val/test
+        should_evaluate = epoch % self.evaluation_period == 0 or epoch == self.epochs
         validation_seconds = 0.0
-        validation_start = time.perf_counter()
-        for part, dataloader in self.evaluation_dataloaders.items():
-            val_logs = self._evaluation_epoch(epoch, part, dataloader)
-            logs.update(**{f"{part}_{name}": value for name, value in val_logs.items()})
-        if self.evaluation_dataloaders:
-            validation_seconds = time.perf_counter() - validation_start
+        if should_evaluate:
+            validation_start = time.perf_counter()
+            for part, dataloader in self.evaluation_dataloaders.items():
+                val_logs = self._evaluation_epoch(epoch, part, dataloader)
+                logs.update(
+                    **{f"{part}_{name}": value for name, value in val_logs.items()}
+                )
+            if self.evaluation_dataloaders:
+                validation_seconds = time.perf_counter() - validation_start
 
         total_seconds = train_seconds + validation_seconds
         timing = {
             "train_seconds": train_seconds,
             "validation_seconds": validation_seconds,
-            "validation_share": validation_seconds / total_seconds
-            if total_seconds
-            else 0.0,
+            "validation_share": (
+                validation_seconds / total_seconds if total_seconds else 0.0
+            ),
         }
         if uses_cuda:
             gibibyte = 1024**3
@@ -649,7 +674,16 @@ class BaseTrainer:
         for metric_name in metric_tracker.keys():
             self.writer.add_scalar(f"{metric_name}", metric_tracker.avg(metric_name))
 
-    def _save_checkpoint(self, epoch, save_best=False, only_best=False):
+    def _save_initial_checkpoint(self):
+        if self.global_step != 0 or self.sampler_step != 0:
+            raise ValueError("initial checkpoint requires global_step=sampler_step=0")
+        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        path = self.checkpoint_dir / "checkpoint-step0.pth"
+        if path.exists():
+            raise FileExistsError(f"refusing to overwrite initial checkpoint: {path}")
+        return self._save_checkpoint(0, filename=path.name)
+
+    def _save_checkpoint(self, epoch, save_best=False, only_best=False, filename=None):
         """
         Save the checkpoints.
 
@@ -660,10 +694,9 @@ class BaseTrainer:
                 'model_best.pth'(do not duplicate the checkpoint as
                 checkpoint-epochEpochNumber.pth)
         """
-        arch = type(self.model).__name__
         grad_scaler = getattr(self, "grad_scaler", None)
         state = {
-            "arch": arch,
+            "arch": type(self.model).__name__,
             "epoch": epoch,
             "state_dict": self.model.state_dict(),
             "optimizer": self.optimizer.state_dict(),
@@ -674,12 +707,13 @@ class BaseTrainer:
             "sampler_step": self.sampler_step,
             "rng_state": self._rng_state(),
             "dataloader_rng_state": self._dataloader_rng_state(),
-            "grad_scaler": grad_scaler.state_dict()
-            if grad_scaler is not None
-            else None,
+            "grad_scaler": (
+                grad_scaler.state_dict() if grad_scaler is not None else None
+            ),
             "config": self.config,
         }
-        filename = str(self.checkpoint_dir / f"checkpoint-epoch{epoch}.pth")
+        filename = filename or f"checkpoint-epoch{epoch}.pth"
+        filename = str(self.checkpoint_dir / filename)
         latest_path = None
         if not (only_best and save_best):
             torch.save(state, filename)
@@ -749,7 +783,6 @@ class BaseTrainer:
         self.global_step = int(checkpoint.get("global_step", fallback_step))
         self.sampler_step = int(checkpoint.get("sampler_step", self.global_step))
         self.not_improved_count = int(checkpoint.get("not_improved_count", 0))
-
         # load architecture params from checkpoint.
         if checkpoint["config"]["model"] != self.config["model"]:
             self.logger.warning(

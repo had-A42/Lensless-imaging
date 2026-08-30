@@ -1,0 +1,23 @@
+defaults:
+  - cross_mask_supervised_10k
+  - override model: psf_free_cross_mask_jepa
+  - _self_
+
+protocol:
+  experiment: SSL-CROSS-MASK-JEPA-01
+  stage: supervised-finetune
+  initialization: cross-mask-jepa-10k
+  parent_checkpoint: ${trainer.from_pretrained}
+
+trainer:
+  from_pretrained: ${oc.env:CROSS_MASK_JEPA_CHECKPOINT,missing-cross-mask-jepa-checkpoint}
+
+writer:
+  run_name: cross-mask-jepa-finetune-${condition_name}-seed${trainer.seed}
+  group: cross-mask-jepa-01
+  job_type: supervised-finetune
+  tags: [synthetic, psf-free, article-resolution, ssl, cross-mask, jepa, finetune]
+
+hydra:
+  run:
+    dir: outputs/train/cross-mask-jepa-finetune/${condition_name}/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}
