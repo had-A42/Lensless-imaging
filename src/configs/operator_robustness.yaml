@@ -1,0 +1,10 @@
+defaults:
+  - operator_sensitivity
+  - _self_
+
+experiment: robustness
+output_dir: outputs/operator-robustness
+
+hydra:
+  run:
+    dir: outputs/hydra/operator-robustness/${now:%Y-%m-%d_%H-%M-%S}

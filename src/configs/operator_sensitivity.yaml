@@ -1,0 +1,36 @@
+defaults:
+  - simulator: digicam_article
+  - _self_
+
+experiment: identity
+device: cuda
+roi: [80, 100, 200, 266]
+output_dir: outputs/operator-sensitivity
+
+data:
+  root_dir: data/raw/mirflickr25k/extracted
+  splits_path: manifests/mirflickr25k_splits.json
+  verify_files: false
+  mask_count: 32
+  scene_count: 32
+  psf_cache:
+    mode: read_write
+    root_dir: data/operator_psf_cache
+    request_modes: [finite]
+    warmup: false
+
+solver:
+  dtype: float32
+  n_iter: 100
+  mu1: 1.0e-6
+  mu2: 1.0e-5
+  mu3: 4.0e-5
+  tau: 1.0e-4
+
+statistics:
+  bootstrap_samples: 10000
+  bootstrap_seed: 20260827
+
+hydra:
+  run:
+    dir: outputs/hydra/operator-sensitivity/${now:%Y-%m-%d_%H-%M-%S}
