@@ -1,4 +1,3 @@
-import hashlib
 import numbers
 from pathlib import Path
 
@@ -537,7 +536,6 @@ class PSFFreeXRestormer(nn.Module):
         layer_norm_type="WithBias",
         padding_size=64,
         checkpoint_path: str | Path | None = None,
-        checkpoint_sha256: str | None = None,
         strict_checkpoint=True,
         output_crop=None,
     ):
@@ -592,7 +590,6 @@ class PSFFreeXRestormer(nn.Module):
             self.load_official_checkpoint(
                 checkpoint_path,
                 strict=strict_checkpoint,
-                expected_sha256=checkpoint_sha256,
             )
 
     @property
@@ -603,15 +600,10 @@ class PSFFreeXRestormer(nn.Module):
         self,
         checkpoint_path,
         strict=True,
-        expected_sha256=None,
     ):
         path = Path(checkpoint_path).expanduser()
         if not path.is_file():
             raise FileNotFoundError(f"Local checkpoint not found: {path}")
-        if expected_sha256 is not None:
-            digest = hashlib.sha256(path.read_bytes()).hexdigest()
-            if digest != expected_sha256:
-                raise ValueError("checkpoint SHA256 does not match the model config")
         try:
             checkpoint = torch.load(path, map_location="cpu", weights_only=True)
         except TypeError:

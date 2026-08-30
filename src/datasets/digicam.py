@@ -1,4 +1,3 @@
-import hashlib
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -85,7 +84,6 @@ class DigiCamRealDataset(Dataset):
         self.source_dataset = source_dataset
         self.indices = self._normalize_indices(indices)
         self.psfs = {}
-        self.psf_hashes = {}
         if self.return_psf:
             self._prepare_psfs(expected_mask_count, expected_scenes_per_mask)
 
@@ -127,7 +125,6 @@ class DigiCamRealDataset(Dataset):
             psf = psf / psf.norm()
             psf = psf.contiguous()
             self.psfs[mask_id] = psf
-            self.psf_hashes[mask_id] = hashlib.sha256(psf.numpy().tobytes()).hexdigest()
 
     def _load_huggingface_dataset(self):
         try:
@@ -234,7 +231,6 @@ class DigiCamRealDataset(Dataset):
         if self.return_psf:
             mask_id = int(mask_id)
             sample["psf"] = self.psfs[mask_id]
-            sample["psf_sha256"] = self.psf_hashes[mask_id]
         return sample
 
     def _image_to_chw_float(self, image: Any, field: str) -> torch.Tensor:

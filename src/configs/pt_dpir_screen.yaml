@@ -7,7 +7,6 @@ initialization_name: large-scratch
 
 model:
   checkpoint_path: null
-  checkpoint_sha256: null
 
 writer:
   run_name: pt-dpir-screen-${initialization_name}-${condition_name}-seed${trainer.seed}

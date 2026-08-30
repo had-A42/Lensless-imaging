@@ -13,7 +13,6 @@ condition_name: finite-100
 provenance:
   experiment: E01
   checkpoint_condition: ${condition_name}
-  checkpoint_sha256: null
   dataset_repo: bezzam/DigiCam-Mirflickr-MultiMask-25K
   dataset_revision: 21d82b67662ed1e590a40c98688c32cb3c74f079
   expected_samples: 3750

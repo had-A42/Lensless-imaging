@@ -1,4 +1,4 @@
-_target_: src.model.PSFFreeAutoencoderKL
+_target_: src.model.psf_free_autoencoder_kl.PSFFreeAutoencoderKL
 
 local_snapshot_path: null
 pretrained: false

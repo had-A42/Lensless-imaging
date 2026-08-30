@@ -1,4 +1,4 @@
-_target_: src.model.PSFFreeDRUNet
+_target_: src.model.psf_free_drunet.PSFFreeDRUNet
 
 channels: 3
 nc: [32, 64, 128, 256]

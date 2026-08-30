@@ -1,5 +1,4 @@
 from src.datasets.digicam import DigiCamRealDataset
-from src.datasets.example import ExampleDataset
 from src.datasets.mirflickr import MirFlickrSceneDataset
 from src.datasets.mnist import MNISTSceneDataset
 from src.datasets.on_the_fly import (
@@ -10,7 +9,6 @@ from src.datasets.on_the_fly import (
 )
 
 __all__ = [
-    "ExampleDataset",
     "DigiCamRealDataset",
     "MirFlickrSceneDataset",
     "MNISTSceneDataset",

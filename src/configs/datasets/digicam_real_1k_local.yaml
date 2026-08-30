@@ -9,6 +9,7 @@ train:
   rotate_measurement: true
   measurement_downsample: 1.0
   target_size: [200, 266]
+  target_resize_mode: bilinear
 
 validation:
   _target_: src.datasets.DigiCamRealDataset
@@ -21,3 +22,4 @@ validation:
   rotate_measurement: true
   measurement_downsample: 1.0
   target_size: [200, 266]
+  target_resize_mode: bilinear

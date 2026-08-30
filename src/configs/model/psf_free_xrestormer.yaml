@@ -1,4 +1,4 @@
-_target_: src.model.PSFFreeXRestormer
+_target_: src.model.psf_free_xrestormer.PSFFreeXRestormer
 
 channels: 3
 dim: 48
@@ -15,7 +15,6 @@ layer_norm_type: WithBias
 padding_size: 64
 
 checkpoint_path: null
-checkpoint_sha256: null
 strict_checkpoint: true
 
 output_crop: null

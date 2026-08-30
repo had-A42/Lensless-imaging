@@ -1,4 +1,4 @@
-_target_: src.model.PSFFreeDINOv3
+_target_: src.model.psf_free_dinov3.PSFFreeDINOv3
 
 local_snapshot_path: null
 pretrained_encoder: false

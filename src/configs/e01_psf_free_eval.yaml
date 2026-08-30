@@ -19,7 +19,6 @@ protocol:
 provenance:
   experiment: E01
   checkpoint_condition: ${condition_name}
-  checkpoint_sha256: null
   evaluation_mask_seed: ${dataloader_builder.evaluation_mask_seed}
   validation_seed: ${dataloader_builder.validation_seed}
   expected_samples: 1024

@@ -1,4 +1,3 @@
-from src.metrics.example import ExampleMetric
 from src.metrics.reconstruction import (
     LPIPSMetric,
     PooledPSNRMetric,
@@ -8,7 +7,6 @@ from src.metrics.reconstruction import (
 )
 
 __all__ = [
-    "ExampleMetric",
     "PSNRMetric",
     "SSIMMetric",
     "PooledPSNRMetric",

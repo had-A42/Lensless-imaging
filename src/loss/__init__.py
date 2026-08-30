@@ -1,5 +1,4 @@
 from src.loss.cross_mask_physics import CrossMaskPhysicsLoss, reproject_roi
-from src.loss.example import ExampleLoss
 from src.loss.reconstruction import (
     MultiscaleReconstructionLoss,
     ReconstructionLoss,
@@ -7,7 +6,6 @@ from src.loss.reconstruction import (
 )
 
 __all__ = [
-    "ExampleLoss",
     "CrossMaskPhysicsLoss",
     "MultiscaleReconstructionLoss",
     "ReconstructionLoss",

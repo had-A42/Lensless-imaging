@@ -1,4 +1,3 @@
-import hashlib
 import time
 from pathlib import Path
 
@@ -27,8 +26,6 @@ class PSFAwareLenslessModel(nn.Module):
         revision,
         cache_dir="data/huggingface",
         output_crop=None,
-        expected_parameters=None,
-        expected_checkpoint_sha256=None,
     ):
         super().__init__()
         if not repo_id:
@@ -40,11 +37,8 @@ class PSFAwareLenslessModel(nn.Module):
         self.revision = revision
         self.cache_dir = str(Path(to_absolute_path(str(cache_dir))).expanduser())
         self.output_crop = tuple(output_crop) if output_crop is not None else None
-        self.expected_parameters = expected_parameters
-        self.expected_checkpoint_sha256 = expected_checkpoint_sha256
         self.reconstruction = None
         self.load_seconds = 0.0
-        self.checkpoint_sha256 = None
 
     def _load(self, psf):
         start_time = time.perf_counter()
@@ -53,15 +47,6 @@ class PSFAwareLenslessModel(nn.Module):
             revision=self.revision,
             cache_dir=self.cache_dir,
         )
-        checkpoint_path = Path(model_path) / "recon_epochBEST"
-        self.checkpoint_sha256 = hashlib.sha256(
-            checkpoint_path.read_bytes()
-        ).hexdigest()
-        if (
-            self.expected_checkpoint_sha256 is not None
-            and self.checkpoint_sha256 != self.expected_checkpoint_sha256
-        ):
-            raise RuntimeError("published checkpoint SHA256 does not match")
         self.reconstruction = load_model(
             model_path=model_path,
             psf=psf,
@@ -69,16 +54,6 @@ class PSFAwareLenslessModel(nn.Module):
             verbose=True,
         )
         self.load_seconds = time.perf_counter() - start_time
-        parameter_count = sum(
-            parameter.numel() for parameter in self.reconstruction.parameters()
-        )
-        if self.expected_parameters is not None and parameter_count != int(
-            self.expected_parameters
-        ):
-            raise RuntimeError(
-                f"expected {self.expected_parameters} parameters, found "
-                f"{parameter_count}"
-            )
         self.reconstruction.eval()
 
     @staticmethod

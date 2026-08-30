@@ -1,4 +1,3 @@
-import hashlib
 import json
 import time
 
@@ -95,20 +94,7 @@ class Inferencer(BaseTrainer):
             self._from_pretrained(config.inferencer.get("from_pretrained"))
 
     def _from_pretrained(self, pretrained_path):
-        digest = hashlib.sha256()
-        with open(pretrained_path, "rb") as file:
-            for chunk in iter(lambda: file.read(1024 * 1024), b""):
-                digest.update(chunk)
-        checkpoint_sha256 = digest.hexdigest()
-
-        expected_sha256 = None
-        if self.config.get("provenance") is not None:
-            expected_sha256 = self.config.provenance.get("checkpoint_sha256")
-        if expected_sha256 is not None and checkpoint_sha256 != expected_sha256:
-            raise ValueError("checkpoint SHA256 does not match the experiment config")
-
         super()._from_pretrained(pretrained_path)
-        self.model.checkpoint_sha256 = checkpoint_sha256
 
     def run_inference(self):
         """
@@ -221,7 +207,6 @@ class Inferencer(BaseTrainer):
                 "sample_id",
                 "scene_id",
                 "mask_id",
-                "psf_sha256",
                 "split",
                 "label",
             ):
@@ -262,7 +247,6 @@ class Inferencer(BaseTrainer):
                 "sample_id",
                 "scene_id",
                 "mask_id",
-                "psf_sha256",
                 "split",
                 "label",
             ):
@@ -297,16 +281,6 @@ class Inferencer(BaseTrainer):
 
         per_image = pd.DataFrame(rows)
         metric_names = [metric.name for metric in self.metrics["inference"]]
-        psf_by_mask = None
-        if "psf_sha256" in per_image:
-            hash_counts = per_image.groupby("mask_id")["psf_sha256"].nunique()
-            if not (hash_counts == 1).all():
-                raise ValueError("each mask_id must have exactly one PSF hash")
-            psf_by_mask = (
-                per_image.groupby("mask_id", sort=True)["psf_sha256"]
-                .first()
-                .reset_index()
-            )
         per_mask = per_image.groupby("mask_id", sort=True).agg(
             sample_count=("sample_index", "count"),
             **{
@@ -316,8 +290,6 @@ class Inferencer(BaseTrainer):
             },
         )
         per_mask = per_mask.reset_index()
-        if psf_by_mask is not None:
-            per_mask = per_mask.merge(psf_by_mask, on="mask_id", validate="one_to_one")
 
         sample_weighted = {name: float(per_image[name].mean()) for name in metric_names}
         mask_balanced = {
@@ -360,7 +332,6 @@ class Inferencer(BaseTrainer):
                 if str(self.device).startswith("cuda")
                 else 0
             ),
-            "checkpoint_sha256": getattr(self.model, "checkpoint_sha256", None),
         }
         if per_class is not None:
             summary.update(

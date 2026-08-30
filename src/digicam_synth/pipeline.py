@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import importlib
 import sys
 from collections.abc import Iterator
@@ -372,9 +371,6 @@ def pattern_to_psf(
 
     psf_metadata = {
         "array_contract": "DHWC",
-        "pattern_sha256": hashlib.sha256(
-            np.ascontiguousarray(pattern).tobytes()
-        ).hexdigest(),
         "pattern_shape": pattern_original_shape,
         "programmed_pattern_shape": list(programmed_pattern.shape),
         "mask_shape": list(mask_hwc.shape),

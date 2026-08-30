@@ -16,7 +16,6 @@ protocol:
   representation: 32x32 padded MNIST with 8x8 superpixels
 
 provenance:
-  checkpoint_sha256: null
   evaluation_mask_seed: ${dataloader_builder.evaluation_mask_seed}
   validation_seed: ${dataloader_builder.validation_seed}
   expected_samples: 3200

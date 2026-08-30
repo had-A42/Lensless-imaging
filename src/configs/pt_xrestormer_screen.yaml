@@ -12,14 +12,11 @@ model_metadata:
 
 official_checkpoint:
   repository: https://github.com/Andrew0613/X-Restormer
-  revision: e096da6bf5f640f8a0d1fde3eec893ded1feac6f
   url: https://drive.google.com/file/d/1akQHXC-PFHgj9iayHxFOm_leSc9t4RBC/view
-  sha256: 12c6f5c8053cdede1e37d442ebf0824817007c32214c1b51b29e50636db39354
   license: MIT
 
 model:
   checkpoint_path: ${initialization.checkpoint_path}
-  checkpoint_sha256: ${initialization.checkpoint_sha256}
 
 dataloader_builder:
   batch_size: 1

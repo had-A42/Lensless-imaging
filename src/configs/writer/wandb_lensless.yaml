@@ -2,9 +2,9 @@ _target_: src.logger.WandBWriter
 project_name: lensless-imaging
 entity: had-2005-hse-university
 run_name: ${condition_name}-seed${trainer.seed}
-mode: online
+mode: offline
 loss_names: [loss, mse_loss]
-log_checkpoints: true
+log_checkpoints: false
 log_best_checkpoint_at_end: false
 log_images: true
 image_log_step: 1000

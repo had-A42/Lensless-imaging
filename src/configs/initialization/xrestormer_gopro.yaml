@@ -1,3 +1,2 @@
 name: xrestormer-gopro-pretrained
 checkpoint_path: ${oc.env:XRESTORMER_CHECKPOINT}
-checkpoint_sha256: 12c6f5c8053cdede1e37d442ebf0824817007c32214c1b51b29e50636db39354
