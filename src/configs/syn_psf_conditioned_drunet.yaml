@@ -1,0 +1,27 @@
+defaults:
+  - e01_mask_diversity_screen
+  - override scale_condition: finite_100
+  - override model: psf_aware_drunet
+  - _self_
+
+protocol:
+  experiment: SYN-PSF-COND-01
+  information_regime: measurement + corresponding PSF
+  comparison: matched finite-100 DRUNet at 10k steps
+
+dataloader_builder:
+  return_psf: true
+
+trainer:
+  device_tensors: [measurement, psf, target]
+
+writer:
+  run_name: syn-psf-conditioned-drunet-seed${trainer.seed}
+  group: syn-psf-conditioned-drunet
+  job_type: psf-conditioned
+  tags: [synthetic, psf-aware-boundary, drunet, corrected-v1]
+  log_best_checkpoint_at_end: false
+
+hydra:
+  run:
+    dir: outputs/train/syn-psf-conditioned-drunet/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}

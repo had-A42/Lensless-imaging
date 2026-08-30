@@ -213,6 +213,82 @@ class PSFFreeDRUNet(nn.Module):
         feature = feature + x1
         return self.network.m_tail(feature), feature
 
+    @staticmethod
+    def _symmetric_padding(height: int, width: int) -> tuple[int, int, int, int]:
+        pad_height = (-height) % 8
+        pad_width = (-width) % 8
+        top = pad_height // 2
+        bottom = pad_height - top
+        left = pad_width // 2
+        right = pad_width - left
+        return left, right, top, bottom
+
+    def _noise_map(self, reference: Tensor) -> Tensor:
+        if (
+            self.noise_level.detach().item() <= 0
+            or self.noise_level.detach().item() > 255
+        ):
+            raise ValueError("learned noise_level must remain in (0, 255]")
+        value = (self.noise_level / 255.0).to(reference)
+        return value.reshape(1, 1, 1, 1).expand(
+            reference.shape[0], 1, reference.shape[2], reference.shape[3]
+        )
+
+    def _format_output(
+        self,
+        prediction: Tensor,
+        feature: Tensor,
+        scale: Tensor,
+        image_size: tuple[int, int],
+        padding: tuple[int, int, int, int],
+        return_features: bool,
+    ) -> dict[str, Tensor]:
+        height, width = image_size
+        left, _, top, _ = padding
+        prediction = prediction[..., top : top + height, left : left + width]
+        feature = feature[..., top : top + height, left : left + width]
+
+        crop = None
+        if self.output_crop is not None:
+            crop_top, crop_left, crop_height, crop_width = self.output_crop
+            crop_bottom = crop_top + crop_height
+            crop_right = crop_left + crop_width
+            if crop_bottom > height or crop_right > width:
+                raise ValueError(
+                    "output_crop exceeds the reconstructed image bounds: "
+                    f"crop={self.output_crop}, image={(height, width)}"
+                )
+            crop = (crop_top, crop_bottom, crop_left, crop_right)
+            if self.output_normalization == "min_max":
+                prediction = prediction[..., crop_top:crop_bottom, crop_left:crop_right]
+            feature = feature[..., crop_top:crop_bottom, crop_left:crop_right]
+
+        if self.output_normalization == "positive_max":
+            prediction = prediction.clamp_min(0.0) * scale
+            prediction_max = prediction.amax(dim=(1, 2, 3), keepdim=True)
+            prediction = torch.where(
+                prediction_max > 0,
+                prediction / prediction_max.clamp_min(1e-12),
+                prediction,
+            )
+            if crop is not None:
+                crop_top, crop_bottom, crop_left, crop_right = crop
+                prediction = prediction[..., crop_top:crop_bottom, crop_left:crop_right]
+        else:
+            prediction_min = prediction.amin(dim=(1, 2, 3), keepdim=True)
+            prediction = prediction - prediction_min
+            prediction_max = prediction.amax(dim=(1, 2, 3), keepdim=True)
+            prediction = torch.where(
+                prediction_max > 0,
+                prediction / prediction_max.clamp_min(1e-12),
+                prediction,
+            )
+
+        output = {"prediction": prediction}
+        if return_features:
+            output["features"] = feature
+        return output
+
     def forward(
         self,
         measurement: Tensor,
@@ -223,80 +299,23 @@ class PSFFreeDRUNet(nn.Module):
         self._validate_measurement(measurement)
 
         height, width = measurement.shape[-2:]
-        pad_height = (-height) % 8
-        pad_width = (-width) % 8
-        top = pad_height // 2
-        bottom = pad_height - top
-        left = pad_width // 2
-        right = pad_width - left
+        padding = self._symmetric_padding(height, width)
 
         scale = measurement.amax(dim=(1, 2, 3), keepdim=True) + 1e-6
         normalized = measurement / scale
-        normalized = F.pad(normalized, (left, right, top, bottom), value=0.0)
-
-        if (
-            self.noise_level.detach().item() <= 0
-            or self.noise_level.detach().item() > 255
-        ):
-            raise ValueError("learned noise_level must remain in (0, 255]")
-        noise_map = (self.noise_level / 255.0).to(normalized)
-        noise_map = noise_map.reshape(1, 1, 1, 1).expand(
-            normalized.shape[0], 1, normalized.shape[2], normalized.shape[3]
-        )
+        normalized = F.pad(normalized, padding, value=0.0)
+        noise_map = self._noise_map(normalized)
         network_input = torch.cat((normalized, noise_map), dim=1)
 
         prediction, feature = self._network_forward(network_input)
-        prediction = prediction[..., top : top + height, left : left + width]
-        feature = feature[..., top : top + height, left : left + width]
-
-        if self.output_crop is not None:
-            crop_top, crop_left, crop_height, crop_width = self.output_crop
-            crop_bottom = crop_top + crop_height
-            crop_right = crop_left + crop_width
-            if crop_bottom > height or crop_right > width:
-                raise ValueError(
-                    "output_crop exceeds the reconstructed image bounds: "
-                    f"crop={self.output_crop}, image={(height, width)}"
-                )
-            if self.output_normalization == "min_max":
-                prediction = prediction[
-                    ...,
-                    crop_top:crop_bottom,
-                    crop_left:crop_right,
-                ]
-            feature = feature[
-                ...,
-                crop_top:crop_bottom,
-                crop_left:crop_right,
-            ]
-
-        if self.output_normalization == "positive_max":
-            prediction = prediction.clamp_min(0.0) * scale
-            prediction_max = prediction.amax(dim=(1, 2, 3), keepdim=True)
-            prediction = torch.where(
-                prediction_max > 0,
-                prediction / prediction_max.clamp_min(1e-12),
-                prediction,
-            )
-        else:
-            prediction_min = prediction.amin(dim=(1, 2, 3), keepdim=True)
-            prediction = prediction - prediction_min
-            prediction_max = prediction.amax(dim=(1, 2, 3), keepdim=True)
-            prediction = torch.where(
-                prediction_max > 0,
-                prediction / prediction_max.clamp_min(1e-12),
-                prediction,
-            )
-        if self.output_crop is not None and self.output_normalization == "positive_max":
-            prediction = prediction[
-                ...,
-                crop_top:crop_bottom,
-                crop_left:crop_right,
-            ]
-        output = {"prediction": prediction}
-        if return_features:
-            output["features"] = feature
-        return output
+        return self._format_output(
+            prediction,
+            feature,
+            scale,
+            image_size=(height, width),
+            padding=padding,
+            return_features=return_features,
+        )
 
 
 __all__ = [
