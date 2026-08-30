@@ -1,0 +1,79 @@
+defaults:
+  - model: psf_free_drunet
+  - writer: wandb_lensless
+  - metrics: reconstruction
+  - datasets: digicam_ref_psff_real_68
+  - dataloader: reconstruction
+  - transforms: reconstruction
+  - _self_
+
+condition_name: ref-psff-real-68-v1
+measurement_domain: real
+
+protocol:
+  experiment: REF-PSFF-REAL-68-v1
+  scope: real measurements versus matched simulation on the same rows and masks
+  development_masks: 68
+  outer_holdout_masks: 17
+  outer_holdout_open: false
+
+model:
+  output_crop: [80, 100, 200, 266]
+
+optimizer:
+  _target_: torch.optim.Adam
+  lr: 1.0e-4
+  weight_decay: 0.0
+
+lr_scheduler:
+  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+  T_max: ${trainer.total_steps}
+  eta_min: 1.0e-6
+
+loss_function:
+  _target_: src.loss.ReconstructionLoss
+  mse_weight: 1.0
+  ssim_weight: 0.0
+  lpips_weight: 1.0
+  lpips_net: vgg
+  normalize_by_max: true
+
+writer:
+  run_name: ref-psff-real-68-${measurement_domain}-seed${trainer.seed}
+  group: ref-psff-real-68-v1
+  job_type: ${measurement_domain}
+  tags: [real, matched-sim, psf-free, fixed-budget]
+  loss_names: [loss, mse_loss, lpips_loss]
+
+dataloader:
+  batch_size: 4
+  num_workers: 8
+  pin_memory: true
+  prefetch_factor: 2
+
+trainer:
+  seed: 42
+  device: cuda
+  device_tensors: [measurement, target]
+  n_epochs: 10
+  epoch_len: 1000
+  total_steps: 10000
+  evaluation_period: 10
+  log_step: 50
+  monitor: "off"
+  save_period: 10
+  keep_last_checkpoints: 1
+  early_stop: 10
+  save_dir: saved
+  resume_from: null
+  from_pretrained: null
+  override: false
+  skip_oom: false
+  max_grad_norm: null
+  amp:
+    enabled: false
+    dtype: bfloat16
+
+hydra:
+  run:
+    dir: outputs/train/ref-psff-real-68/${measurement_domain}/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}

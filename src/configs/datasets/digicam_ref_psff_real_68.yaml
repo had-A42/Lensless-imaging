@@ -1,0 +1,21 @@
+train:
+  _target_: src.datasets.digicam_matched.DigiCamMatchedDomainDataset
+  role: train
+  measurement_domain: ${measurement_domain}
+  repo_id: bezzam/DigiCam-Mirflickr-MultiMask-25K
+  revision: 21d82b67662ed1e590a40c98688c32cb3c74f079
+  split: train
+  cache_dir: ${oc.env:HF_HOME,./data/huggingface}
+  prepared_psf_bundle_path: data/ref_psff_real/prepared_psfs_v1.npz
+  convolver_cache_size: 2
+
+validation:
+  _target_: src.datasets.digicam_matched.DigiCamMatchedDomainDataset
+  role: inner_validation
+  measurement_domain: real
+  repo_id: bezzam/DigiCam-Mirflickr-MultiMask-25K
+  revision: 21d82b67662ed1e590a40c98688c32cb3c74f079
+  split: train
+  cache_dir: ${oc.env:HF_HOME,./data/huggingface}
+  prepared_psf_bundle_path: null
+  convolver_cache_size: 2
