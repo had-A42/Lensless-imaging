@@ -1,0 +1,14 @@
+_target_: src.model.psf_free_vit_ssl.PSFFreeViTSSL
+
+encoder_kind: lingbot
+local_snapshot_path: null
+pretrained_encoder: false
+feature_dim: 384
+layer_indices: [2, 5, 8, 11]
+patch_size: 16
+freeze_encoder: true
+
+channels: 3
+decoder_channels: 128
+decoder_seed: 52
+output_crop: [80, 100, 200, 266]

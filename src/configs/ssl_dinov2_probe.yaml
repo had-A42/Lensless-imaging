@@ -1,0 +1,38 @@
+defaults:
+  - e02_mask_scaling_screen
+  - initialization: vit_ssl_random
+  - override scale_condition: finite_100
+  - override model: psf_free_vit_ssl
+  - _self_
+
+backbone_name: dinov2-small
+initialization_name: ${initialization.name}
+
+official_checkpoint:
+  model_id: facebook/dinov2-small
+  repository: https://huggingface.co/facebook/dinov2-small
+  code: https://github.com/facebookresearch/dinov2
+  license: Apache-2.0
+
+model:
+  encoder_kind: dinov2
+  local_snapshot_path: ${oc.env:DINOV2_SNAPSHOT,null}
+  pretrained_encoder: ${initialization.pretrained_encoder}
+  feature_dim: 384
+  patch_size: 14
+
+dataloader_builder:
+  batch_size: 4
+
+writer:
+  run_name: ssl-dinov2-small-${initialization_name}-${condition_name}-seed${trainer.seed}
+  group: ssl-external-01
+  job_type: ${backbone_name}-${initialization_name}
+  tags: [synthetic, psf-free, article-resolution, ssl, dinov2, frozen-probe]
+
+hydra:
+  run:
+    dir: outputs/train/ssl-dinov2/${initialization_name}/${condition_name}/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}
+  sweep:
+    dir: outputs/train/ssl-dinov2/multirun/${now:%Y-%m-%d_%H-%M-%S}
+    subdir: ${initialization_name}/${condition_name}/seed${trainer.seed}
