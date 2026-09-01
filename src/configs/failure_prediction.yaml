@@ -1,0 +1,46 @@
+defaults:
+  - model: psf_free_xrestormer
+  - datasets: mirflickr_on_the_fly
+  - simulator: digicam_article
+  - _self_
+
+seed: 52
+device: auto
+ridge_regularization: 1.0
+output_dir: results/failure-prediction/xrestormer-seed-ensemble
+
+checkpoint_paths:
+  - ${oc.env:FAILURE_CHECKPOINT_1,null}
+  - ${oc.env:FAILURE_CHECKPOINT_2,null}
+  - ${oc.env:FAILURE_CHECKPOINT_3,null}
+
+model:
+  output_crop: [80, 100, 200, 266]
+
+dataloader_builder:
+  _target_: src.datasets.build_failure_prediction_dataloaders
+  validation_mask_count: 32
+  calibration_mask_count: 16
+  reference_mask_count: 16
+  scenes_per_mask: 16
+  batch_size: 1
+  evaluation_mask_seed: 42
+  reconstruction_mask_seed: 42
+  validation_seed: 52
+  num_workers: 4
+  pin_memory: false
+  prefetch_factor: 1
+  persistent_workers: true
+  measurement_size: null
+  target_size: [200, 266]
+  roi: [80, 100, 200, 266]
+  finite_cache_size: 2
+  psf_cache:
+    mode: read_write
+    root_dir: data/psf_cache
+    request_modes: [finite]
+    warmup: false
+
+hydra:
+  run:
+    dir: outputs/failure-prediction/${now:%Y-%m-%d_%H-%M-%S}

@@ -1,0 +1,30 @@
+defaults:
+  - e01_psf_free_eval
+  - override model: psf_free_xrestormer
+  - _self_
+
+operator_prompt: fourier
+prompt_source: "true"
+
+model:
+  operator_prompt: ${operator_prompt}
+  operator_code_dim: 16
+  operator_hidden_dim: 128
+
+inferencer:
+  device_tensors: [measurement, target, psf]
+
+dataloader_builder:
+  batch_size: 1
+  return_psf: true
+  operator_prompt_mode: ${prompt_source}
+
+writer:
+  run_name: operator-prompt-eval-${operator_prompt}-${prompt_source}-d${model.operator_code_dim}-seed${inferencer.seed}
+  group: operator-prompt-01-eval
+  job_type: ${operator_prompt}-${prompt_source}
+  tags: [synthetic, operator-prompt, causal, evaluation]
+
+hydra:
+  run:
+    dir: outputs/inference/operator-prompt/${operator_prompt}-${prompt_source}/d${model.operator_code_dim}/${now:%Y-%m-%d_%H-%M-%S}

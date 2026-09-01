@@ -501,11 +501,25 @@ class XRestormer(nn.Module):
         )
         self.output = nn.Conv2d(dim * 2, output_channels, 3, padding=1, bias=bias)
 
-    def forward(self, value):
-        first = self.encoder_level1(self.patch_embed(value))
-        second = self.encoder_level2(self.down1_2(first))
-        third = self.encoder_level3(self.down2_3(second))
-        latent = self.latent(self.down3_4(third))
+    @staticmethod
+    def _condition(value, parameters):
+        if parameters is None:
+            return value
+        scale, shift = parameters
+        return value * (1 + scale) + shift
+
+    def forward(self, value, conditioning=None):
+        if conditioning is None:
+            conditioning = (None,) * 4
+
+        first = self.patch_embed(value)
+        first = self.encoder_level1(self._condition(first, conditioning[0]))
+        second = self.down1_2(first)
+        second = self.encoder_level2(self._condition(second, conditioning[1]))
+        third = self.down2_3(second)
+        third = self.encoder_level3(self._condition(third, conditioning[2]))
+        latent = self.down3_4(third)
+        latent = self.latent(self._condition(latent, conditioning[3]))
 
         output = self.up4_3(latent)
         output = self.reduce_chan_level3(torch.cat((output, third), dim=1))
@@ -517,6 +531,70 @@ class XRestormer(nn.Module):
         output = self.decoder_level1(torch.cat((output, first), dim=1))
         output = self.refinement(output)
         return self.output(output) + value
+
+
+class LowRankFourierPSFCode(nn.Module):
+    def __init__(self, code_dim):
+        super().__init__()
+        self.code_dim = int(code_dim)
+        if self.code_dim <= 0 or self.code_dim % 2:
+            raise ValueError("operator code dimension must be a positive even number")
+
+    def forward(self, psf):
+        if not isinstance(psf, Tensor) or psf.ndim != 4:
+            raise ValueError("psf must be an NCHW tensor")
+        if not psf.is_floating_point():
+            raise TypeError("psf must be a floating-point tensor")
+
+        psf = psf.mean(dim=1)
+        psf = psf / psf.sum(dim=(-2, -1), keepdim=True).clamp_min(1e-12)
+        spectrum = torch.fft.rfft2(psf)
+        height, frequency_width = spectrum.shape[-2:]
+        frequency_count = self.code_dim // 2
+
+        frequencies = []
+        for vertical in range(height):
+            wrapped_vertical = min(vertical, height - vertical)
+            for horizontal in range(frequency_width):
+                if vertical == 0 and horizontal == 0:
+                    continue
+                radius = wrapped_vertical**2 + horizontal**2
+                frequencies.append((radius, wrapped_vertical, horizontal, vertical))
+        frequencies.sort()
+        if len(frequencies) < frequency_count:
+            raise ValueError("PSF is too small for the requested operator code")
+
+        coefficients = [
+            spectrum[:, vertical, horizontal]
+            for _, _, horizontal, vertical in frequencies[:frequency_count]
+        ]
+        coefficients = torch.stack(coefficients, dim=1)
+        code = torch.stack((coefficients.real, coefficients.imag), dim=-1).flatten(1)
+        return F.layer_norm(code, (self.code_dim,))
+
+
+class OperatorFiLM(nn.Module):
+    def __init__(self, code_dim, hidden_dim, feature_dims):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(int(code_dim), int(hidden_dim)),
+            nn.GELU(),
+        )
+        self.projections = nn.ModuleList(
+            nn.Linear(int(hidden_dim), 2 * int(feature_dim))
+            for feature_dim in feature_dims
+        )
+        for projection in self.projections:
+            nn.init.zeros_(projection.weight)
+            nn.init.zeros_(projection.bias)
+
+    def forward(self, code):
+        hidden = self.encoder(code)
+        conditioning = []
+        for projection in self.projections:
+            scale, shift = projection(hidden).chunk(2, dim=1)
+            conditioning.append((scale[:, :, None, None], shift[:, :, None, None]))
+        return tuple(conditioning)
 
 
 class PSFFreeXRestormer(nn.Module):
@@ -538,6 +616,9 @@ class PSFFreeXRestormer(nn.Module):
         checkpoint_path: str | Path | None = None,
         strict_checkpoint=True,
         output_crop=None,
+        operator_prompt="none",
+        operator_code_dim=16,
+        operator_hidden_dim=128,
     ):
         super().__init__()
         for name, values in (
@@ -570,6 +651,9 @@ class PSFFreeXRestormer(nn.Module):
         self.channels = int(channels)
         self.padding_size = int(padding_size)
         self.output_crop = output_crop
+        self.operator_prompt = str(operator_prompt)
+        if self.operator_prompt not in {"none", "fourier", "constant"}:
+            raise ValueError("operator_prompt must be none, fourier or constant")
         self.network = XRestormer(
             input_channels=self.channels,
             output_channels=self.channels,
@@ -585,6 +669,15 @@ class PSFFreeXRestormer(nn.Module):
             bias=bool(bias),
             layer_norm_type=str(layer_norm_type),
         )
+        self.operator_code = None
+        self.operator_conditioner = None
+        if self.operator_prompt != "none":
+            self.operator_code = LowRankFourierPSFCode(operator_code_dim)
+            self.operator_conditioner = OperatorFiLM(
+                code_dim=operator_code_dim,
+                hidden_dim=operator_hidden_dim,
+                feature_dims=(int(dim), int(dim) * 2, int(dim) * 4, int(dim) * 8),
+            )
 
         if checkpoint_path is not None:
             self.load_official_checkpoint(
@@ -634,9 +727,25 @@ class PSFFreeXRestormer(nn.Module):
         ):
             raise ValueError("measurement values must be in [0, 1]")
 
-    def forward(self, measurement, **batch):
+    def _operator_conditioning(self, measurement, psf):
+        if self.operator_prompt == "none":
+            return None
+        if self.operator_prompt == "fourier":
+            if psf is None:
+                raise ValueError("fourier operator prompt needs psf in the batch")
+            if psf.shape[0] != measurement.shape[0]:
+                raise ValueError("measurement and psf batch sizes must match")
+            code = self.operator_code(psf.to(dtype=measurement.dtype))
+        else:
+            code = measurement.new_zeros(
+                (measurement.shape[0], self.operator_code.code_dim)
+            )
+        return self.operator_conditioner(code)
+
+    def forward(self, measurement, psf=None, **batch):
         del batch
         self._validate_measurement(measurement)
+        conditioning = self._operator_conditioning(measurement, psf)
         height, width = measurement.shape[-2:]
         pad_height = (-height) % self.padding_size
         pad_width = (-width) % self.padding_size
@@ -645,7 +754,9 @@ class PSFFreeXRestormer(nn.Module):
             (0, pad_width, 0, pad_height),
             mode="reflect",
         )
-        prediction = self.network(padded)[..., :height, :width].clamp_min(0)
+        prediction = self.network(padded, conditioning=conditioning)[
+            ..., :height, :width
+        ].clamp_min(0)
         prediction_max = prediction.amax(dim=(1, 2, 3), keepdim=True)
         prediction = torch.where(
             prediction_max > 0,

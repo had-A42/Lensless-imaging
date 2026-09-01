@@ -1,0 +1,37 @@
+defaults:
+  - lsc01_long_budget
+  - initialization: xrestormer_scratch
+  - override model: psf_free_xrestormer
+  - _self_
+
+operator_prompt: fourier
+prompt_source: "true"
+
+model:
+  checkpoint_path: ${initialization.checkpoint_path}
+  operator_prompt: ${operator_prompt}
+  operator_code_dim: 16
+  operator_hidden_dim: 128
+
+trainer:
+  device_tensors: [measurement, target, psf]
+
+dataloader_builder:
+  batch_size: 1
+  return_psf: true
+  operator_prompt_mode: ${prompt_source}
+
+writer:
+  run_name: operator-prompt-${operator_prompt}-${prompt_source}-d${model.operator_code_dim}-${condition_name}-seed${trainer.seed}
+  group: operator-prompt-01
+  job_type: ${operator_prompt}-${prompt_source}
+  tags: [synthetic, operator-prompt, causal, article-resolution]
+  log_checkpoints: false
+  log_best_checkpoint_at_end: false
+
+hydra:
+  run:
+    dir: outputs/train/operator-prompt/${operator_prompt}-${prompt_source}/d${model.operator_code_dim}/${condition_name}/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}
+  sweep:
+    dir: outputs/train/operator-prompt/multirun/${now:%Y-%m-%d_%H-%M-%S}
+    subdir: ${operator_prompt}-${prompt_source}/d${model.operator_code_dim}/${condition_name}/seed${trainer.seed}

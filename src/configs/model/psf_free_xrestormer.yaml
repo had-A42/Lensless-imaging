@@ -18,3 +18,7 @@ checkpoint_path: null
 strict_checkpoint: true
 
 output_crop: null
+
+operator_prompt: none
+operator_code_dim: 16
+operator_hidden_dim: 128

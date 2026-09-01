@@ -8,6 +8,7 @@ from src.datasets.on_the_fly import (
     DigiCamOnTheFlyDataset,
     DigiCamValidationBatchSampler,
     build_cross_mask_gate_dataloader,
+    build_failure_prediction_dataloaders,
     build_on_the_fly_dataloaders,
 )
 
@@ -21,5 +22,6 @@ __all__ = [
     "DigiCamOnTheFlyDataset",
     "DigiCamValidationBatchSampler",
     "build_cross_mask_gate_dataloader",
+    "build_failure_prediction_dataloaders",
     "build_on_the_fly_dataloaders",
 ]
