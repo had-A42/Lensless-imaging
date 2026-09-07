@@ -619,6 +619,7 @@ class PSFFreeXRestormer(nn.Module):
         operator_prompt="none",
         operator_code_dim=16,
         operator_hidden_dim=128,
+        output_normalization="positive_max",
     ):
         super().__init__()
         for name, values in (
@@ -651,6 +652,9 @@ class PSFFreeXRestormer(nn.Module):
         self.channels = int(channels)
         self.padding_size = int(padding_size)
         self.output_crop = output_crop
+        if output_normalization not in {"positive_max", "min_max"}:
+            raise ValueError("output_normalization must be positive_max or min_max")
+        self.output_normalization = output_normalization
         self.operator_prompt = str(operator_prompt)
         if self.operator_prompt not in {"none", "fourier", "constant"}:
             raise ValueError("operator_prompt must be none, fourier or constant")
@@ -756,13 +760,15 @@ class PSFFreeXRestormer(nn.Module):
         )
         prediction = self.network(padded, conditioning=conditioning)[
             ..., :height, :width
-        ].clamp_min(0)
-        prediction_max = prediction.amax(dim=(1, 2, 3), keepdim=True)
-        prediction = torch.where(
-            prediction_max > 0,
-            prediction / prediction_max.clamp_min(1e-12),
-            prediction,
-        )
+        ]
+        if self.output_normalization == "positive_max":
+            prediction = prediction.clamp_min(0)
+            prediction_max = prediction.amax(dim=(1, 2, 3), keepdim=True)
+            prediction = torch.where(
+                prediction_max > 0,
+                prediction / prediction_max.clamp_min(1e-12),
+                prediction,
+            )
         if self.output_crop is not None:
             top, left, crop_height, crop_width = self.output_crop
             if top + crop_height > height or left + crop_width > width:
@@ -772,6 +778,11 @@ class PSFFreeXRestormer(nn.Module):
                 top : top + crop_height,
                 left : left + crop_width,
             ]
+        if self.output_normalization == "min_max":
+            prediction = prediction - prediction.amin(dim=(1, 2, 3), keepdim=True)
+            prediction = prediction / prediction.amax(
+                dim=(1, 2, 3), keepdim=True
+            ).clamp_min(1e-12)
         return {"prediction": prediction}
 
 

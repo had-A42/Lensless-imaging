@@ -1,0 +1,54 @@
+defaults:
+  - model: psf_free_drunet
+  - writer: wandb_lensless
+  - metrics: celeba_reconstruction
+  - datasets: celeba_on_the_fly
+  - dataloader_builder: digicam_validation
+  - simulator: digicam_article
+  - _self_
+
+scene_size: 32
+superpixel_size: 8
+evaluation_name: unseen-masks
+
+protocol:
+  version: corrected-v1
+  scope: CelebA development validation, not official test
+
+model:
+  output_crop: [62, 125, 256, 256]
+  output_normalization: min_max
+
+metrics:
+  device: ${inferencer.device}
+
+dataloader_builder:
+  train_mask_seed: ${inferencer.seed}
+  evaluation_mask_seed: 52
+  target_size: [256, 256]
+  roi: [62, 125, 256, 256]
+  psf_cache:
+    warmup: false
+
+inferencer:
+  device_tensors: [measurement, target]
+  device: auto
+  seed: 42
+  output_type: reconstruction
+  save_dir: saved
+  from_pretrained: ${oc.env:CELEBA_CHECKPOINT,null}
+  skip_model_load: false
+  override: false
+  example_indices: [0, 1, 2, 3, 32, 33, 34, 35]
+
+writer:
+  run_name: celeba${scene_size}-sp${superpixel_size}-${evaluation_name}-eval-seed${inferencer.seed}
+  group: celeba-psf-free-evaluation
+  job_type: ${evaluation_name}
+  mode: offline
+  loss_names: []
+  log_images: false
+
+hydra:
+  run:
+    dir: outputs/inference/celeba/${writer.run_name}/${now:%Y-%m-%d_%H-%M-%S}

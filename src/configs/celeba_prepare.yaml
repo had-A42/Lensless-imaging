@@ -1,0 +1,10 @@
+root_dir: ${oc.env:CELEBA_ROOT,data/raw/celeba}
+download: false
+split_seed: 42
+samples:
+  train: 4096
+  validation: 128
+
+hydra:
+  run:
+    dir: outputs/prepare/celeba/${now:%Y-%m-%d_%H-%M-%S}

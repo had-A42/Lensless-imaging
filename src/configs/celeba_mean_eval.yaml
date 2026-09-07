@@ -1,0 +1,17 @@
+defaults:
+  - celeba_eval
+  - _self_
+
+model: ${mean_model}
+mean_model:
+  _target_: src.model.scene_mean.SceneMeanReconstructor
+  scenes: ${datasets.train}
+
+inferencer:
+  skip_model_load: true
+  from_pretrained: null
+
+evaluation_name: train-mean
+
+dataloader_builder:
+  validation_mask_count: 1

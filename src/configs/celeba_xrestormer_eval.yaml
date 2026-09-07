@@ -1,0 +1,16 @@
+defaults:
+  - celeba_eval
+  - override model: psf_free_xrestormer
+  - _self_
+
+model:
+  checkpoint_path: null
+  output_normalization: min_max
+
+dataloader_builder:
+  batch_size: 1
+  persistent_workers: false
+
+writer:
+  run_name: celeba${scene_size}-sp${superpixel_size}-xrestormer-${evaluation_name}-eval-seed${inferencer.seed}
+  group: celeba-xrestormer-evaluation

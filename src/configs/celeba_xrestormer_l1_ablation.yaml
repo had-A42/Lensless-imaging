@@ -1,0 +1,37 @@
+defaults:
+  - celeba_xrestormer
+  - override metrics: celeba_grid
+  - _self_
+
+protocol:
+  experiment: CELEBA-XREST-L1-01
+  scope: matched 2k fine-tuning from one final 10k finite-100 checkpoint
+  model_initialization: shared CelebA finite-100 10k GoPro-XRestormer weights
+  parent_checkpoint: ${trainer.from_pretrained}
+  changed_factor: full-resolution L1 weight 0.1 versus 1.0
+  compute_note: 2k additional steps per arm; reset Adam and cosine schedule in both arms
+  grid_diagnostics: block8 and periodic16 residual RMSE, both lower is better
+  interpretation: periodic16 is a diagnostic proxy; compare LPIPS and fixed examples too
+
+model:
+  checkpoint_path: null
+
+celeba_loss:
+  full_l1_weight: 1.0
+
+optimizer:
+  lr: 1.0e-5
+
+trainer:
+  seed: 42
+  n_epochs: 2
+  epoch_len: 1000
+  total_steps: 2000
+  from_pretrained: ${oc.env:CELEBA_XREST_PARENT}
+  resume_from: null
+
+writer:
+  run_name: celeba32-xrest-l1-${celeba_loss.full_l1_weight}-${trainer.total_steps}step-seed${trainer.seed}
+  group: celeba-xrestormer-l1-ablation
+  job_type: full-l1-${celeba_loss.full_l1_weight}
+  tags: [celeba, corrected-v1, xrestormer, loss-ablation, development]

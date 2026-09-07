@@ -1,0 +1,7 @@
+defaults:
+  - celeba_xrestormer_eval
+  - override metrics: celeba_grid
+  - _self_
+
+writer:
+  group: celeba-xrestormer-l1-evaluation

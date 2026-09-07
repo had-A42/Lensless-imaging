@@ -1,0 +1,30 @@
+defaults:
+  - celeba_reconstruction
+  - _self_
+
+inference:
+  - _target_: src.metrics.PSNRMetric
+    normalize_by_max: false
+    name: PSNR
+  - _target_: src.metrics.SSIMMetric
+    normalize_by_max: false
+    name: SSIM
+  - _target_: src.metrics.PooledPSNRMetric
+    pooling_factor: ${superpixel_size}
+    normalize_by_max: false
+    name: PSNR_coarse
+  - _target_: src.metrics.PooledSSIMMetric
+    pooling_factor: ${superpixel_size}
+    normalize_by_max: false
+    name: SSIM_coarse
+  - _target_: src.metrics.LPIPSMetric
+    net_type: vgg
+    device: ${metrics.device}
+    normalize_by_max: false
+    name: LPIPS
+  - _target_: src.metrics.grid_artifacts.BlockResidualRMSE
+    block_size: ${superpixel_size}
+    name: block_residual_rmse
+  - _target_: src.metrics.grid_artifacts.PeriodicResidualRMSE
+    period: 16
+    name: periodic16_residual_rmse

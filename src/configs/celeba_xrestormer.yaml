@@ -1,0 +1,29 @@
+defaults:
+  - celeba_psf_free
+  - initialization: xrestormer_gopro
+  - override model: psf_free_xrestormer
+  - _self_
+
+protocol:
+  experiment: CELEBA-XREST-01
+  scope: CelebA mask-regime comparison with GoPro-initialized X-Restormer
+  model_initialization: ${initialization.name}
+  compute_note: 10k optimizer steps; batch 1 BF16 versus batch 4 FP32 in DRUNet
+
+model:
+  checkpoint_path: ${initialization.checkpoint_path}
+  output_normalization: min_max
+
+trainer:
+  amp:
+    enabled: true
+    dtype: bfloat16
+
+dataloader_builder:
+  batch_size: 1
+  persistent_workers: false
+
+writer:
+  run_name: celeba${scene_size}-sp${superpixel_size}-${initialization.name}-${condition_name}-${trainer.total_steps}step-seed${trainer.seed}
+  group: celeba-xrestormer-corrected
+  tags: [synthetic, psf-free, celeba, corrected-v1, xrestormer, pretrain, development]

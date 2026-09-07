@@ -849,6 +849,7 @@ def build_on_the_fly_dataloaders(
     cross_validation_steps=0,
     return_psf=False,
     operator_prompt_mode="none",
+    validation_mask_split="validation",
 ):
     if train_mask_seed is None:
         train_mask_seed = base_mask_seed
@@ -865,9 +866,17 @@ def build_on_the_fly_dataloaders(
     if validation_scenes is None:
         validation_scenes = _scene_dataset(datasets_config.validation)
 
+    if validation_mask_split not in {"train", "validation"}:
+        raise ValueError("validation_mask_split must be train or validation")
+    if validation_mask_split == "train" and (
+        train_mode != "finite"
+        or finite_mask_count is None
+        or validation_mask_count > finite_mask_count
+    ):
+        raise ValueError("Seen-mask validation needs a finite bank with enough masks")
     validation_records = get_mask_records(
-        evaluation_mask_seed,
-        "validation",
+        train_mask_seed if validation_mask_split == "train" else evaluation_mask_seed,
+        validation_mask_split,
         int(validation_mask_count),
     )
 

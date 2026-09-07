@@ -10,6 +10,7 @@ wandb
 hydra-core
 einops==0.8.1
 datasets
+gdown
 huggingface_hub==0.36.2
 transformers==4.56.2
 diffusers==0.35.2

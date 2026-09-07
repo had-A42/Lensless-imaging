@@ -1,0 +1,6 @@
+defaults:
+  - celeba_psf_free
+  - _self_
+
+scene_size: 64
+superpixel_size: 4

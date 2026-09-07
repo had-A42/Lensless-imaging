@@ -1,0 +1,15 @@
+defaults:
+  - celeba_xrestormer
+  - override scale_condition: finite_1
+  - _self_
+
+protocol:
+  scope: new validation faces with the one known training mask
+
+dataloader_builder:
+  validation_mask_split: train
+  validation_mask_count: 1
+
+writer:
+  run_name: celeba${scene_size}-sp${superpixel_size}-${initialization.name}-single-seen-${trainer.total_steps}step-seed${trainer.seed}
+  job_type: single-seen-mask

@@ -1,0 +1,82 @@
+defaults:
+  - psf_free_scale
+  - scale_condition: finite_100
+  - override datasets: celeba_on_the_fly
+  - override metrics: celeba_reconstruction
+  - _self_
+
+scene_size: 32
+superpixel_size: 8
+condition_name: ${scale_condition.name}
+mask_mode: ${scale_condition.mask_mode}
+mask_count: ${scale_condition.mask_count}
+
+protocol:
+  experiment: CELEBA-PSFF-01
+  version: corrected-v1
+  scope: RGB simple-scene development experiment in the project simulator
+  scene_representation: aligned center crop -> antialiased resize -> nearest superpixels
+  target_shape: [3, 256, 256]
+  roi: [62, 125, 256, 256]
+  target_normalization: RGB in [0, 1], no per-image normalization in loss or metrics
+  official_test_accessed: false
+  endpoint: fixed final step; best validation checkpoint is secondary
+
+model:
+  output_crop: ${protocol.roi}
+  output_normalization: min_max
+
+loss_function: ${celeba_loss}
+
+celeba_loss:
+  _target_: src.loss.MultiscaleReconstructionLoss
+  pooling_factor: ${superpixel_size}
+  pooled_mse_weight: 1.0
+  pooled_ssim_weight: 0.1
+  pooled_dice_weight: 0.0
+  full_ssim_weight: 0.0
+  full_l1_weight: 0.1
+
+trainer:
+  seed: 42
+  n_epochs: 4
+  epoch_len: 2500
+  total_steps: 10000
+  monitor: max validation_PSNR_coarse_mask_balanced
+  early_stop: -1
+  save_period: 1
+  keep_last_checkpoints: 1
+
+metrics:
+  device: ${trainer.device}
+
+dataloader_builder:
+  train_mask_seed: ${trainer.seed}
+  evaluation_mask_seed: 52
+  validation_mask_count: 32
+  validation_scenes_per_mask: 32
+  target_size: [256, 256]
+  roi: ${protocol.roi}
+  num_workers: 4
+  pin_memory: true
+  psf_cache:
+    mode: read_write
+    warmup: false
+
+writer:
+  loss_names: [loss, pooled_mse_loss, pooled_ssim_loss, pooled_dice_loss, full_ssim_loss, full_l1_loss]
+  run_name: celeba${scene_size}-sp${superpixel_size}-drunet-${condition_name}-${trainer.total_steps}step-seed${trainer.seed}
+  group: celeba-psf-free-corrected
+  job_type: ${condition_name}
+  tags: [synthetic, psf-free, celeba, corrected-v1, superpixel, development]
+  mode: offline
+  log_images: false
+  log_checkpoints: false
+  log_best_checkpoint_at_end: false
+
+hydra:
+  run:
+    dir: outputs/train/celeba/${writer.run_name}/${now:%Y-%m-%d_%H-%M-%S}
+  sweep:
+    dir: outputs/train/celeba/multirun/${now:%Y-%m-%d_%H-%M-%S}
+    subdir: ${writer.run_name}

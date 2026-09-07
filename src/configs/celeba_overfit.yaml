@@ -1,0 +1,20 @@
+defaults:
+  - celeba_single_mask
+  - _self_
+
+datasets:
+  train:
+    max_samples: 4
+
+trainer:
+  n_epochs: 2
+  epoch_len: 250
+  total_steps: 500
+  monitor: "off"
+
+dataloader_builder:
+  validation_scenes_per_mask: 4
+
+writer:
+  run_name: celeba${scene_size}-sp${superpixel_size}-overfit-${trainer.total_steps}step-seed${trainer.seed}
+  group: celeba-diagnostics

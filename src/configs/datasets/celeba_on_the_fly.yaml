@@ -1,0 +1,19 @@
+train:
+  _target_: src.datasets.celeba.CelebASceneDataset
+  root_dir: ${oc.env:CELEBA_ROOT,data/raw/celeba}
+  split: train
+  max_samples: 4096
+  split_seed: 42
+  image_size: ${scene_size}
+  superpixel_size: ${superpixel_size}
+  crop_size: 178
+
+validation:
+  _target_: src.datasets.celeba.CelebASceneDataset
+  root_dir: ${datasets.train.root_dir}
+  split: validation
+  max_samples: 128
+  split_seed: ${datasets.train.split_seed}
+  image_size: ${scene_size}
+  superpixel_size: ${superpixel_size}
+  crop_size: ${datasets.train.crop_size}
