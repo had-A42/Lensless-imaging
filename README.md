@@ -91,7 +91,8 @@ checkpoint:
 
 ```bash
 mkdir -p model_weights/xrestormer
-gdown 1akQHXC-PFHgj9iayHxFOm_leSc9t4RBC +  -O model_weights/xrestormer/net_g_latest.pth
+gdown 1akQHXC-PFHgj9iayHxFOm_leSc9t4RBC \
+  -O model_weights/xrestormer/net_g_latest.pth
 export XRESTORMER_CHECKPOINT="$PWD/model_weights/xrestormer/net_g_latest.pth"
 ```
 
@@ -107,13 +108,17 @@ The SD-VAE, DINOv2, and LingBot-Vision configs accept local Hugging Face
 snapshots:
 
 ```bash
-hf download stabilityai/sd-vae-ft-mse +  --revision 31f26fdeee1355a5c34592e401dd41e45d25a493 +  --local-dir data/pretrained/sd-vae-ft-mse
+hf download stabilityai/sd-vae-ft-mse \
+  --revision 31f26fdeee1355a5c34592e401dd41e45d25a493 \
+  --local-dir data/pretrained/sd-vae-ft-mse
 export SD_VAE_SNAPSHOT="$PWD/data/pretrained/sd-vae-ft-mse"
 
-hf download facebook/dinov2-small +  --local-dir data/pretrained/dinov2-small
+hf download facebook/dinov2-small \
+  --local-dir data/pretrained/dinov2-small
 export DINOV2_SNAPSHOT="$PWD/data/pretrained/dinov2-small"
 
-hf download robbyant/lingbot-vision-vit-small +  --local-dir data/pretrained/lingbot-vision-vit-small
+hf download robbyant/lingbot-vision-vit-small \
+  --local-dir data/pretrained/lingbot-vision-vit-small
 export LINGBOT_SNAPSHOT="$PWD/data/pretrained/lingbot-vision-vit-small"
 ```
 
@@ -202,7 +207,10 @@ real-data config is used. For the smaller local pilot, download the pinned 1K
 snapshot explicitly:
 
 ```bash
-hf download bezzam/DigiCam-Mirflickr-MultiMask-1K +  --repo-type dataset +  --revision 782d4557516d82c2797e56dde70973c25db70d69 +  --local-dir data/hf/DigiCam-Mirflickr-MultiMask-1K
+hf download bezzam/DigiCam-Mirflickr-MultiMask-1K \
+  --repo-type dataset \
+  --revision 782d4557516d82c2797e56dde70973c25db70d69 \
+  --local-dir data/hf/DigiCam-Mirflickr-MultiMask-1K
 ```
 
 ### Synthetic masks and PSFs
@@ -226,7 +234,9 @@ python train.py -cn=CONFIG_NAME HYDRA_CONFIG_ARGUMENTS
 Inspect the fully resolved config before a long run:
 
 ```bash
-python train.py -cn=e01_mask_diversity_screen +  scale_condition=finite_100 +  --cfg job --resolve
+python train.py -cn=e01_mask_diversity_screen \
+  scale_condition=finite_100 \
+  --cfg job --resolve
 ```
 
 The default W&B mode is offline. Enable online logging explicitly:
@@ -239,13 +249,22 @@ python train.py -cn=e01_mask_diversity_screen writer.mode=online
 Run the mask-diversity screen:
 
 ```bash
-python train.py -m -cn=e01_mask_diversity_screen +  scale_condition=finite_100,infinite +  trainer.seed=42,52,62 +  trainer.device=cuda
+python train.py -m -cn=e01_mask_diversity_screen \
+  scale_condition=finite_100,infinite \
+  trainer.seed=42,52,62 \
+  trainer.device=cuda
 ```
 
 Run one GoPro-initialized X-Restormer experiment:
 
 ```bash
-python train.py -cn=pt_xrestormer_screen +  initialization=xrestormer_gopro +  scale_condition=finite_100 +  trainer.seed=42 +  trainer.device=cuda +  trainer.amp.enabled=true +  trainer.amp.dtype=bfloat16
+python train.py -cn=pt_xrestormer_screen \
+  initialization=xrestormer_gopro \
+  scale_condition=finite_100 \
+  trainer.seed=42 \
+  trainer.device=cuda \
+  trainer.amp.enabled=true \
+  trainer.amp.dtype=bfloat16
 ```
 
 Structured-scene experiments use:
@@ -253,13 +272,18 @@ Structured-scene experiments use:
 ```bash
 python train.py -cn=mnist_psf_free trainer.seed=42 trainer.device=cuda
 
-python train.py -cn=celeba_psf_free +  scale_condition=finite_100 +  trainer.seed=42 +  trainer.device=cuda
+python train.py -cn=celeba_psf_free \
+  scale_condition=finite_100 \
+  trainer.seed=42 \
+  trainer.device=cuda
 ```
 
 The real-measurement baseline is launched with:
 
 ```bash
-python train.py -cn=psf_free_real_train +  trainer.device=cuda +  writer.run_name=real-25k-unet8m-seed0
+python train.py -cn=psf_free_real_train \
+  trainer.device=cuda \
+  writer.run_name=real-25k-unet8m-seed0
 ```
 
 ### Evaluation
@@ -267,13 +291,19 @@ python train.py -cn=psf_free_real_train +  trainer.device=cuda +  writer.run_nam
 Evaluate a PSF-free checkpoint on the fixed MIRFLICKR validation grid:
 
 ```bash
-python inference.py -cn=e01_psf_free_eval +  condition_name=finite-100 +  inferencer.device=cuda +  inferencer.from_pretrained=/absolute/path/to/model_best.pth +  writer.run_name=e01-eval-finite-100
+python inference.py -cn=e01_psf_free_eval \
+  condition_name=finite-100 \
+  inferencer.device=cuda \
+  inferencer.from_pretrained=/absolute/path/to/model_best.pth \
+  writer.run_name=e01-eval-finite-100
 ```
 
 Evaluate the published PSF-aware reference:
 
 ```bash
-python inference.py -cn=ref_psf_aware_real +  inferencer.device=cuda +  writer.run_name=ref-psf-aware-real
+python inference.py -cn=ref_psf_aware_real \
+  inferencer.device=cuda \
+  writer.run_name=ref-psf-aware-real
 ```
 
 The reference receives the true PSF and is not a PSF-free baseline.
@@ -284,10 +314,62 @@ The following command runs one optimizer step and one validation example on
 CPU. MIRFLICKR must already be prepared.
 
 ```bash
-python train.py -cn=e01_mask_diversity_screen +  scale_condition=finite_100 +  trainer.device=cpu +  trainer.n_epochs=1 +  trainer.epoch_len=1 +  trainer.total_steps=1 +  trainer.monitor=off +  trainer.override=true +  dataloader_builder.validation_mask_count=1 +  dataloader_builder.validation_scenes_per_mask=1 +  dataloader_builder.num_workers=0 +  dataloader_builder.psf_cache.mode=off +  dataloader_builder.psf_cache.warmup=false +  writer.mode=disabled +  writer.run_name=readme-smoke
+python train.py -cn=e01_mask_diversity_screen \
+  scale_condition=finite_100 \
+  trainer.device=cpu \
+  trainer.n_epochs=1 \
+  trainer.epoch_len=1 \
+  trainer.total_steps=1 \
+  trainer.monitor=off \
+  trainer.override=true \
+  dataloader_builder.validation_mask_count=1 \
+  dataloader_builder.validation_scenes_per_mask=1 \
+  dataloader_builder.num_workers=0 \
+  dataloader_builder.psf_cache.mode=off \
+  dataloader_builder.psf_cache.warmup=false \
+  writer.mode=disabled \
+  writer.run_name=readme-smoke
 ```
 
 The first LPIPS run may download torchvision VGG weights.
+
+### Testing dataset downloads
+
+The download helpers can be tested without network access:
+
+```bash
+pytest -q tests/test_dataset_preparation.py
+```
+
+This test uses a local file as the source. It checks download publication,
+file hashes, ZIP extraction, and rejection of unsafe archive paths.
+
+For a real clean-download test, use MNIST in an isolated temporary directory:
+
+```bash
+rm -rf -- /private/tmp/lensless-mnist-download-test
+rm -f -- /private/tmp/lensless-mnist-splits.json
+
+python prepare_mnist.py \
+  root_dir=/private/tmp/lensless-mnist-download-test \
+  manifest.output_path=/private/tmp/lensless-mnist-splits.json
+```
+
+The command must download both official partitions, validate 70,000 samples,
+and create the manifest. Repeat it with network access disabled to test the
+offline path:
+
+```bash
+python prepare_mnist.py \
+  root_dir=/private/tmp/lensless-mnist-download-test \
+  manifest.output_path=/private/tmp/lensless-mnist-splits.json \
+  download=false
+```
+
+MIRFLICKR and CelebA can be tested with the same `root_dir` and
+`manifest.output_path` overrides. Their downloads are much larger:
+MIRFLICKR requires about 6.2 GiB for the archive and extracted data, while the
+CelebA archive is about 1.34 GiB.
 
 ### Outputs and reproducibility
 
