@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from pathlib import Path
@@ -12,20 +11,14 @@ from PIL import Image
 from torch.nn import functional as F
 from torch.utils.data import Dataset
 
+from src.datasets.split_manifest import load_split_manifest, validate_split_manifest
+
 MIRFLICKR_IMAGE_COUNT = 25_000
 DIGICAM_MULTIMASK_PERIOD = 100
 DIGICAM_REAL_TEST_MASK_COUNT = 15
 
 _ORIGINAL_FILENAME = re.compile(r"^im(?P<one_based>[1-9][0-9]*)$", re.IGNORECASE)
 _RENAMED_FILENAME = re.compile(r"^(?P<zero_based>0|[1-9][0-9]*)$")
-
-
-def file_digest(path: str | Path, algorithm: str = "sha256") -> str:
-    digest = hashlib.new(algorithm)
-    with Path(path).open("rb") as file:
-        for chunk in iter(lambda: file.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def mirflickr_source_index(path: str | Path) -> int:
@@ -70,17 +63,6 @@ def discover_mirflickr_images(root_dir: str | Path) -> dict[int, Path]:
     return images
 
 
-def verify_mirflickr_images(images: dict[int, Path]) -> None:
-    for source_index, path in images.items():
-        try:
-            with Image.open(path) as image:
-                image.verify()
-        except Exception as error:
-            raise ValueError(
-                f"Invalid MIRFLICKR image at source index {source_index}: {path}"
-            ) from error
-
-
 def is_external_real_test_scene(source_index: int) -> bool:
     source_index = int(source_index)
     if source_index < 0:
@@ -98,10 +80,9 @@ def _normalize_split_counts(split_counts: dict[str, int]) -> dict[str, int]:
     return normalized
 
 
-def build_mirflickr_splits(
+def make_mirflickr_splits(
     *,
     root_dir: str | Path,
-    output_path: str | Path,
     split_counts: dict[str, int],
     seed: int,
     expected_image_count: int | None = MIRFLICKR_IMAGE_COUNT,
@@ -138,7 +119,24 @@ def build_mirflickr_splits(
         ]
         offset += count
 
-    payload = {"seed": int(seed), "splits": splits}
+    return {"seed": int(seed), "splits": splits}
+
+
+def build_mirflickr_splits(
+    *,
+    root_dir: str | Path,
+    output_path: str | Path,
+    split_counts: dict[str, int],
+    seed: int,
+    expected_image_count: int | None = MIRFLICKR_IMAGE_COUNT,
+) -> dict[str, Any]:
+    """Build and write a split using the historical public API."""
+    payload = make_mirflickr_splits(
+        root_dir=root_dir,
+        split_counts=split_counts,
+        seed=seed,
+        expected_image_count=expected_image_count,
+    )
 
     output = Path(output_path).expanduser()
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -152,10 +150,7 @@ def build_mirflickr_splits(
 
 
 def load_mirflickr_splits(path: str | Path) -> dict[str, Any]:
-    splits_path = Path(path).expanduser()
-    if not splits_path.is_file():
-        raise FileNotFoundError(f"MIRFLICKR splits not found: {splits_path}")
-    payload = json.loads(splits_path.read_text(encoding="utf-8"))
+    payload = load_split_manifest(path)
     validate_mirflickr_splits(payload)
     return payload
 
@@ -165,33 +160,19 @@ def validate_mirflickr_splits(
     *,
     root_dir: str | Path | None = None,
 ) -> None:
-    if not isinstance(payload, dict) or set(payload) != {"seed", "splits"}:
-        raise ValueError("Split file must contain only seed and splits")
-    if not isinstance(payload["seed"], int) or payload["seed"] < 0:
-        raise ValueError("Split seed must be a non-negative integer")
+    validate_split_manifest(payload)
     splits = payload["splits"]
-    if not isinstance(splits, dict) or set(splits) != {
-        "train",
-        "validation",
-        "test",
-    }:
-        raise ValueError("Splits must contain train, validation and test")
 
     source_indices: set[int] = set()
-    relative_paths: set[str] = set()
     root = Path(root_dir).expanduser().resolve() if root_dir is not None else None
 
     for split, paths in splits.items():
-        if not isinstance(paths, list) or not paths:
-            raise ValueError(f"Split {split} must be a non-empty list")
         for relative_path in paths:
-            if not isinstance(relative_path, str):
-                raise ValueError("Split paths must be safe relative strings")
             path = Path(relative_path)
             if path.is_absolute() or ".." in path.parts:
                 raise ValueError("Split paths must be safe relative strings")
             source_index = mirflickr_source_index(path)
-            if source_index in source_indices or relative_path in relative_paths:
+            if source_index in source_indices:
                 raise ValueError("Split files must be globally unique")
             if is_external_real_test_scene(source_index):
                 raise ValueError(
@@ -200,7 +181,6 @@ def validate_mirflickr_splits(
             if root is not None and not (root / path).is_file():
                 raise FileNotFoundError(root / path)
             source_indices.add(source_index)
-            relative_paths.add(relative_path)
 
 
 class MirFlickrSceneDataset(Dataset):

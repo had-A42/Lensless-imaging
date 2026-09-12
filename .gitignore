@@ -75,7 +75,7 @@ target/
 /docs/
 /notebooks/
 /tests/
-/manifests/*.md
+/manifests/
 /pytest.ini
 /requirements-notebook.txt
 

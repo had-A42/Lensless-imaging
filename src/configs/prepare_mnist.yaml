@@ -1,0 +1,12 @@
+root_dir: data/raw/mnist
+download: true
+
+manifest:
+  output_path: manifests/mnist_splits.json
+  seed: 42
+  validation_per_class: 500
+  rewrite: false
+
+hydra:
+  run:
+    dir: outputs/prepare/mnist/${now:%Y-%m-%d_%H-%M-%S}

@@ -1,21 +1,19 @@
 train:
   _target_: src.datasets.MNISTSceneDataset
   root_dir: data/raw/mnist
+  splits_path: manifests/mnist_splits.json
   split: train
   split_seed: 42
-  validation_per_class: 500
   superpixel_size: 8
   channels: 3
-  download: true
-  max_samples: null
+  download: false
 
 validation:
   _target_: src.datasets.MNISTSceneDataset
   root_dir: data/raw/mnist
+  splits_path: ${datasets.train.splits_path}
   split: validation
   split_seed: 42
-  validation_per_class: 500
   superpixel_size: 8
   channels: 3
-  download: true
-  max_samples: null
+  download: false

@@ -1,0 +1,19 @@
+root_dir: ${oc.env:CELEBA_ROOT,data/raw/celeba}
+download: true
+
+source:
+  partition_file: list_eval_partition.txt
+  archive_file: img_align_celeba.zip
+
+selection:
+  train_count: 4096
+  validation_count: 128
+
+manifest:
+  output_path: manifests/celeba_splits.json
+  seed: 42
+  rewrite: false
+
+hydra:
+  run:
+    dir: outputs/prepare/celeba/${now:%Y-%m-%d_%H-%M-%S}
