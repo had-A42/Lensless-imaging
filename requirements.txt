@@ -19,6 +19,7 @@ git+https://github.com/Robbyant/lingbot-vision.git
 black
 isort
 pre-commit
+pytest
 
 # lensless
 git+https://github.com/LCAV/LenslessPiCam.git@fe150ed274667b13c7817effc6aad478861ebc91
