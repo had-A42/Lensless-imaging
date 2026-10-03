@@ -1,0 +1,49 @@
+defaults:
+  - pt_xrestormer_screen
+  - _self_
+
+optimizer:
+  lr: 3.0e-5
+  weight_decay: 0.0
+
+lr_scheduler:
+  T_max: 50000
+  eta_min: 1.0e-6
+
+dataloader_builder:
+  batch_size: 1
+  train_steps: ${trainer.total_steps}
+  validation_mask_count: 32
+  validation_scenes_per_mask: 32
+  num_workers: 8
+  persistent_workers: false
+
+trainer:
+  n_epochs: 5
+  epoch_len: 10000
+  total_steps: 50000
+  evaluation_period: 5
+  monitor: "off"
+  early_stop: -1
+  save_period: 5
+  keep_last_checkpoints: 2
+  skip_oom: false
+  max_grad_norm: null
+  amp:
+    enabled: true
+    dtype: bfloat16
+
+writer:
+  mode: offline
+  group: coursework-review-xrest-lower-lr-v1
+  job_type: ${initialization.name}
+  tags: [synthetic, psf-free, xrestormer, lower-lr, supervisor-review]
+  log_checkpoints: false
+  log_best_checkpoint_at_end: false
+  log_images: false
+  save_code: false
+  log_git_state: false
+
+hydra:
+  run:
+    dir: outputs/coursework_review_optimization_v1_20260916/hydra/${writer.run_name}

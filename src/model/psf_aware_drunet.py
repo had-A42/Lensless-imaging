@@ -16,11 +16,14 @@ class PSFAwareDRUNet(PSFFreeDRUNet):
     """
 
     def __init__(self, *args, **kwargs) -> None:
-        if kwargs.get("checkpoint_path") is not None:
-            raise ValueError(
-                "PSF-aware DRUNet currently supports training from scratch"
-            )
-        super().__init__(*args, **kwargs)
+        checkpoint_path = kwargs.pop("checkpoint_path", None)
+        strict_checkpoint = bool(kwargs.pop("strict_checkpoint", True))
+        super().__init__(
+            *args,
+            checkpoint_path=None,
+            strict_checkpoint=True,
+            **kwargs,
+        )
         baseline_network = self.network
         conditioned_network = UNetRes(
             in_nc=2 * self.channels + 1,
@@ -33,6 +36,11 @@ class PSFAwareDRUNet(PSFFreeDRUNet):
         )
         self._copy_baseline_initialization(baseline_network, conditioned_network)
         self.network = conditioned_network
+        if checkpoint_path is not None:
+            self.load_local_checkpoint(
+                checkpoint_path,
+                strict=strict_checkpoint,
+            )
 
     def _copy_baseline_initialization(
         self,

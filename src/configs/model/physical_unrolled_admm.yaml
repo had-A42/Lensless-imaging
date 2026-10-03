@@ -1,0 +1,20 @@
+_target_: src.model.psf_aware_lensless.TrainablePSFAwareLenslessModel
+channels: 3
+measurement_shape: [380, 507]
+output_crop: null
+n_iter: 5
+mu1: 1.0e-4
+mu2: 1.0e-4
+mu3: 1.0e-4
+tau: 2.0e-4
+pad: false
+norm: backward
+processor_network: UnetRes
+processor_depth: 4
+processor_channels: [32, 64, 112, 128]
+pre_processor_channels: [32, 64, 112, 128]
+post_processor_channels: [32, 64, 116, 128]
+use_pre_process: true
+use_post_process: true
+require_unit_psf: true
+psf_norm_tolerance: 1.0e-3

@@ -119,6 +119,17 @@ class BaseTrainer:
         self.global_step = 0
         self.sampler_step = 0
         self.not_improved_count = 0
+        accumulation_steps = self.cfg_trainer.get("accumulation_steps", 1)
+        if isinstance(accumulation_steps, bool) or int(accumulation_steps) < 1:
+            raise ValueError("trainer.accumulation_steps must be a positive integer")
+        self.accumulation_steps = int(accumulation_steps)
+        if self.accumulation_steps > 1 and self.skip_oom:
+            raise ValueError(
+                "gradient accumulation requires trainer.skip_oom=false so that "
+                "incomplete update groups cannot be silently skipped"
+            )
+        self._accumulation_start = True
+        self._accumulation_end = True
         self._configure_amp()
 
         # define dataloaders
@@ -148,6 +159,21 @@ class BaseTrainer:
             epoch_len,
             self.cfg_trainer.get("total_steps"),
         )
+        total_steps = self.cfg_trainer.get("total_steps")
+        batch_sampler = getattr(self.train_dataloader_source, "batch_sampler", None)
+        if (
+            epoch_len is not None
+            and total_steps is not None
+            and hasattr(batch_sampler, "set_start_step")
+        ):
+            required_microbatches = int(total_steps) * self.accumulation_steps
+            if len(batch_sampler) < required_microbatches:
+                raise ValueError(
+                    "training sampler does not provide enough microbatches for "
+                    f"{total_steps} optimizer updates with accumulation_steps="
+                    f"{self.accumulation_steps}: {len(batch_sampler)} < "
+                    f"{required_microbatches}"
+                )
 
         # configuration to monitor model performance and save best
 
@@ -294,10 +320,16 @@ class BaseTrainer:
         if uses_cuda:
             torch.cuda.reset_peak_memory_stats()
         train_start = time.perf_counter()
+        epoch_microbatches = self.epoch_len * self.accumulation_steps
         for batch_idx, batch in enumerate(
-            tqdm(self.train_dataloader, desc="train", total=self.epoch_len)
+            tqdm(self.train_dataloader, desc="train", total=epoch_microbatches)
         ):
             self.sampler_step += 1
+            accumulation_index = (self.sampler_step - 1) % self.accumulation_steps
+            self._accumulation_start = accumulation_index == 0
+            self._accumulation_end = (
+                accumulation_index + 1 == self.accumulation_steps
+            )
             try:
                 batch = self.process_batch(
                     batch,
@@ -311,24 +343,31 @@ class BaseTrainer:
                 else:
                     raise e
 
-            self.global_step += 1
-            self.train_metrics.update("grad_norm", batch["grad_norm"])
+            if batch.get("optimizer_step_performed", False):
+                self.global_step += 1
+                self.train_metrics.update("grad_norm", batch["grad_norm"])
 
-            # log current results
-            if batch_idx % self.log_step == 0:
+            update_index = (batch_idx + 1) // self.accumulation_steps - 1
+            if (
+                batch.get("optimizer_step_performed", False)
+                and update_index % self.log_step == 0
+            ):
                 self.writer.set_step(self.global_step)
                 self.logger.debug(
                     "Train Epoch: {} {} Loss: {:.6f}".format(
-                        epoch, self._progress(batch_idx), batch["loss"].item()
+                        epoch, self._progress(update_index), batch["loss"].item()
                     )
                 )
                 self.writer.add_scalar(
                     "learning rate", self.lr_scheduler.get_last_lr()[0]
                 )
                 self._log_scalars(self.train_metrics)
-                self._log_batch(batch_idx, batch)
-            if batch_idx + 1 >= self.epoch_len:
+                self._log_batch(update_index, batch)
+            if batch_idx + 1 >= epoch_microbatches:
                 break
+
+        if self.sampler_step % self.accumulation_steps != 0:
+            raise RuntimeError("training epoch ended inside an accumulation group")
 
         # we don't want to reset train metrics at the start of every epoch
         # because we are interested in recent train metrics
@@ -694,6 +733,15 @@ class BaseTrainer:
                 'model_best.pth'(do not duplicate the checkpoint as
                 checkpoint-epochEpochNumber.pth)
         """
+        accumulation_steps = int(getattr(self, "accumulation_steps", 1))
+        if accumulation_steps > 1 and self.sampler_step != (
+            self.global_step * accumulation_steps
+        ):
+            raise RuntimeError(
+                "refusing to checkpoint an incomplete accumulation group: "
+                f"global_step={self.global_step}, sampler_step={self.sampler_step}, "
+                f"accumulation_steps={accumulation_steps}"
+            )
         grad_scaler = getattr(self, "grad_scaler", None)
         state = {
             "arch": type(self.model).__name__,
@@ -782,6 +830,18 @@ class BaseTrainer:
         fallback_step = checkpoint["epoch"] * self.epoch_len
         self.global_step = int(checkpoint.get("global_step", fallback_step))
         self.sampler_step = int(checkpoint.get("sampler_step", self.global_step))
+        checkpoint_accumulation = int(
+            checkpoint["config"].get("trainer", {}).get("accumulation_steps", 1)
+        )
+        if checkpoint_accumulation != self.accumulation_steps:
+            raise ValueError(
+                "checkpoint accumulation_steps does not match current config: "
+                f"{checkpoint_accumulation} != {self.accumulation_steps}"
+            )
+        if self.accumulation_steps > 1 and self.sampler_step != (
+            self.global_step * self.accumulation_steps
+        ):
+            raise ValueError("checkpoint was not saved on an accumulation boundary")
         self.not_improved_count = int(checkpoint.get("not_improved_count", 0))
         # load architecture params from checkpoint.
         if checkpoint["config"]["model"] != self.config["model"]:
@@ -872,7 +932,7 @@ class BaseTrainer:
             pretrained_path (str): path to the model state dict.
         """
         pretrained_path = str(pretrained_path)
-        if hasattr(self, "logger"):  # to support both trainer and inferencer
+        if getattr(self, "logger", None) is not None:
             self.logger.info(f"Loading model weights from: {pretrained_path} ...")
         else:
             print(f"Loading model weights from: {pretrained_path} ...")

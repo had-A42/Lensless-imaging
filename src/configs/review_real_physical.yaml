@@ -1,0 +1,51 @@
+defaults:
+  - ref_psff_real_68_10k
+  - override model: physical_unrolled_admm
+  - _self_
+
+condition_name: review-real68-physical-v1
+
+protocol:
+  experiment: review-real68-physical-v1
+  information_regime: measurement + corresponding prepared PSF
+  row_protocol: legacy_v1
+  endpoint_policy: final 10k optimizer updates
+
+model:
+  output_crop: [80, 100, 200, 266]
+
+datasets:
+  train:
+    return_psf: true
+    row_protocol: legacy_v1
+  validation:
+    return_psf: true
+    row_protocol: legacy_v1
+    prepared_psf_bundle_path: data/ref_psff_real/prepared_psfs_v1.npz
+
+dataloader:
+  batch_size: 4
+  num_workers: 8
+  persistent_workers: false
+
+trainer:
+  device_tensors: [measurement, psf, target]
+  monitor: "off"
+  early_stop: -1
+  skip_oom: false
+  amp:
+    enabled: false
+    dtype: bfloat16
+
+writer:
+  run_name: review-real68-physical-${measurement_domain}-10k-seed${trainer.seed}-v1
+  group: coursework-review-real-physical-v1
+  job_type: ${measurement_domain}
+  tags: [real, matched-sim, psf-aware, physical, unrolled-admm, supervisor-review]
+  log_checkpoints: false
+  log_best_checkpoint_at_end: false
+  log_images: false
+
+hydra:
+  run:
+    dir: outputs/coursework_review_physics_v1_20260916/real/${measurement_domain}/${writer.run_name}

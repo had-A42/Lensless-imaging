@@ -1,0 +1,137 @@
+# Curated completed runs that are likely to be used in the report.
+# Format: RUN_ID  RUN_NAME
+# Pass selected IDs to sync_queue.sh; cloud completeness still needs UI review.
+# fgmn28ny was once uploaded under cloud ID mncv2s62; check the UI before retrying it.
+
+# Corrected simulator baselines
+9hj9zl4m  a800-phy01-corrected-finite100-10k-seed42
+j5snm32l  a800-phy01-corrected-infinite-10k-seed42
+
+# X-Restormer corrected-v1
+7qeusya9  a800-xrest-cv1-scratch-10k-seed42-73e432d-r3
+zp2olhpl  a800-xrest-cv1-gopro-10k-seed42-73e432d-r3
+ohcc9vz2  a800-xrest-cv1-scratch-10k-seed52-73e432d-r1
+7yn0w01k  a800-xrest-cv1-gopro-10k-seed52-73e432d-r1
+flctydao  a800-xrest-cv1-scratch-10k-seed62-73e432d-r1
+wft4rd97  a800-xrest-cv1-gopro-10k-seed62-73e432d-r1
+2qin4zky  a800-xrest-cv1-scratch-50k-seed42-73e432d-r1
+s9ay4t57  a800-xrest-cv1-gopro-50k-seed42-73e432d-r1
+fam64nii  cv1-xrest-gopro-finite-100-50000step-seed52-508a878-r2
+gp539m2b  cv1-xrest-gopro-finite-100-50000step-seed62-508a878-r2
+w2niedv6  cv1-xrest-scratch-finite-100-50000step-seed52-508a878-r2
+5fe7wj9s  cv1-xrest-scratch-finite-100-50000step-seed62-508a878-r2
+trai8g27  scale100k-xrest-gopro-finite-100-seed42-508a878-r3
+4n8s1krw  scale100k-xrest-scratch-finite-100-seed42-508a878-r3
+
+# X-Restormer corrected-v1 finite-1000, 50k
+6qzt84g8  cv1-xrest-scratch-finite-1000-50000step-seed42-508a878-r3
+7dx7rrw7  cv1-xrest-scratch-finite-1000-50000step-seed52-508a878-r3
+zff3j42w  cv1-xrest-scratch-finite-1000-50000step-seed62-508a878-r3
+xk5kaia7  cv1-xrest-gopro-finite-1000-50000step-seed42-508a878-r3
+swzty3mp  cv1-xrest-gopro-finite-1000-50000step-seed52-508a878-r3
+sidl94fh  cv1-xrest-gopro-finite-1000-50000step-seed62-508a878-r3
+
+# MNIST simple-scene controls
+a6i6cnc2  a800-mnist-cv1-corrected-rgb-10k-seed42
+2b5bx76i  a800-mnist-cv1-corrected-rgb-10k-seed52
+3vm246so  a800-mnist-cv1-corrected-rgb-10k-seed62
+68qy8ims  a800-mnist-cv2-gray-fp32-10k-seed42-73e432d
+8rpgrhvw  a800-mnist-cv2-gray-fp32-10k-seed52-73e432d
+fgmn28ny  a800-mnist-cv2-gray-fp32-10k-seed62-73e432d
+d4qqmwvt  a800-mnist-cv3-dice-only-2k-seed42-73e432d-r1
+akbzw8iv  a800-mnist-cv3-dice-ssim01-2k-seed42-73e432d-r1
+2tz59f3a  a800-mnist-cv3-dice-only-2k-seed52-73e432d-r4
+bickiguo  a800-mnist-cv3-dice-ssim01-2k-seed52-73e432d-r4
+lhi3c7l5  a800-mnist-cv3-dice-only-10k-seed62-73e432d-r1
+0q53trws  a800-mnist-cv3-dice-ssim01-10k-seed62-73e432d-r1
+
+# Real versus matched simulation
+vjql3obv  ref-psff-real-68-real-seed42
+qpojal25  ref-psff-real-68-real-seed52
+fi3ablto  ref-psff-real-68-real-seed62
+6goeo3b1  ref-psff-real-68-matched_sim-seed42
+yj4s7lhf  ref-psff-real-68-matched_sim-seed52
+2ikho7eh  ref-psff-real-68-matched_sim-seed62
+
+# Stable-Diffusion VAE matched controls
+mpo5a10n  a800-ae-sdvae-random-profile100-seed42-73e432d
+fqxg7jud  a800-ae-sdvae-pretrained-profile100-seed42-73e432d
+seqol6kn  a800-ae-sdvae-random-profile1k-seed42-73e432d-r2
+z3byey03  a800-ae-sdvae-pretrained-profile1k-seed42-73e432d-r2
+s5ufu6b3  a800-ae-sdvae-random-10k-seed42-73e432d-r1
+5ewd9v26  a800-ae-sdvae-pretrained-10k-seed42-73e432d-r1
+
+# PSF conditioning and representation-learning pilots
+msbf5doq  syn-psf-conditioned-drunet-seed42-r1
+o3dmxl8b  cross-mask-ssl-finite100-seed42-r4
+r48skpfu  cross-mask-supervised10-finite100-seed42-r4
+qkizsgn8  cross-mask-supervised-reset10-finite100-seed42-r4
+2y72woef  cross-mask-jepa-stable-finite100-seed42-r1
+ud6cv1pj  cross-mask-ssl-finetune-finite100-seed42-r4
+umlsbqgl  cross-mask-jepa-finetune-finite100-seed42-r1
+efgpkbf1  pt-xrestormer-scratch20-finite100-seed42-r1
+
+# Real versus matched simulation, X-Restormer 50k
+zvziv1m3  ref-psff-real68-xrest-gopro50k-real-seed42-r1
+vbhpavzo  ref-psff-real68-xrest-gopro50k-real-seed52-r1
+33km9juc  ref-psff-real68-xrest-gopro50k-real-seed62-r1
+wb6s5k28  ref-psff-real68-xrest-gopro50k-matched-sim-seed42-r2
+cd1r0vfe  ref-psff-real68-xrest-gopro50k-matched-sim-seed52-r1
+m4zv8zy4  ref-psff-real68-xrest-gopro50k-matched-sim-seed62-r1
+
+# Custom SSL, JEPA and supervised controls, 50k
+wy012jnr  cross-mask-ssl10-finetune50-finite100-seed42-r1
+gh96f2p8  cross-mask-jepa10-finetune50-finite100-seed42-r1
+vh8xd18r  cross-mask-supervised50-finite100-seed42-r1
+p9bqdl6x  cross-mask-ssl50-finite100-seed42-r1
+qpfom99m  cross-mask-ssl50-finetune50-finite100-seed42-r1
+42m8plhv  cross-mask-jepa50-finite100-seed42-r1
+u0tsucbk  cross-mask-jepa50-finetune50-finite100-seed42-r1
+6e3iw0pj  cross-mask-supervised50-finite100-seed52-r1
+j4n6482i  cross-mask-supervised50-finite100-seed62-r1
+
+# External SSL and autoencoder controls, 50k
+phfvbli0  ae-sdvae-pretrained50-finite100-seed42-r1
+yuyai3uj  ae-sdvae-random50-finite100-seed42-r1
+b6uvfjdo  ae-sdvae-pretrained50-finite100-seed52-r1
+d47r2ad1  ae-sdvae-random50-finite100-seed52-r1
+rpnelklu  ae-sdvae-pretrained50-finite100-seed62-r1
+pcgbrlgu  ae-sdvae-random50-finite100-seed62-r1
+x6qt1uu1  ssl-lingbot-small-pretrained50-finite100-seed42-r1
+pv4njm9e  ssl-lingbot-small-random50-finite100-seed42-r1
+2jv18xif  ssl-lingbot-small-pretrained50-finite100-seed52-r1
+obrbmmmf  ssl-lingbot-small-random50-finite100-seed52-r1
+ese317k3  ssl-lingbot-small-pretrained50-finite100-seed62-r1
+zcvh6rkb  ssl-lingbot-small-random50-finite100-seed62-r1
+nmoye5z0  ssl-dinov2-small-pretrained50-finite100-seed42-r1
+ud8m8zcv  ssl-dinov2-small-random50-finite100-seed42-r1
+9mkf5uyz  ssl-dinov2-small-pretrained50-finite100-seed52-r1
+0vbtqzoc  ssl-dinov2-small-random50-finite100-seed52-r1
+1a1049ov  ssl-dinov2-small-pretrained50-finite100-seed62-r1
+ydxv2h1t  ssl-dinov2-small-random50-finite100-seed62-r1
+
+# Matched compute scaling, 100k seed 42
+fcueq8e4  scale100k-sdvae-pretrained-finite-100-seed42-508a878-r3
+j8gmh606  scale100k-sdvae-random-finite-100-seed42-508a878-r3
+73kvspel  scale100k-dinov2-pretrained-finite-100-seed42-508a878-r3
+tz8086f7  scale100k-dinov2-random-finite-100-seed42-508a878-r3
+oaz9bst8  scale100k-lingbot-pretrained-finite-100-seed42-508a878-r3
+7m8bdgtp  scale100k-lingbot-random-finite-100-seed42-508a878-r3
+nsl1uu0h  scale100k-drunet-large-scratch-finite-100-seed42-508a878-r3
+
+# Low-rank operator prompt, 50k
+pl8ljnw9  operator-prompt-fourier-true-d16-finite-100-seed42-r1
+j61v4vzu  operator-prompt-fourier-true-d16-finite-100-seed52-r1
+zb9pyboe  operator-prompt-fourier-shuffled-d16-finite-100-seed42-r1
+hpv3iat5  operator-prompt-fourier-shuffled-d16-finite-100-seed52-r1
+ocwn4dbg  operator-prompt-constant-true-d16-finite-100-seed42-r1
+3jm260tp  operator-prompt-constant-true-d16-finite-100-seed52-r1
+
+# Learned sim-to-real adapter, development-only
+e5n58xel  sim-adapter-xrest-10k-seed42-508a878-r2
+eve6taxs  sim-adapter-xrest-10k-seed52-508a878-r2
+z8qk0oyh  sim-adapter-drunet100k-10k-seed42-508a878-r2
+emjksmxr  sim-adapter-drunet100k-10k-seed52-508a878-r2
+wgl43vv7  sim-adapter-sdvae50-10k-seed42-508a878-r2
+qfiv2as6  sim-adapter-dinov2-50-10k-seed42-508a878-r2
+tjkkhtu8  sim-adapter-lingbot-50-10k-seed42-508a878-r2

@@ -1,0 +1,12 @@
+_target_: src.model.psf_aware_lensless.ClassicalPSFAwareADMMModel
+n_iter: 50
+mu1: 1.0e-6
+mu2: 1.0e-5
+mu3: 4.0e-5
+tau: 1.0e-4
+pad: false
+norm: backward
+output_crop: null
+output_normalization: null
+require_unit_psf: true
+psf_norm_tolerance: 1.0e-3

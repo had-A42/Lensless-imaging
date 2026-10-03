@@ -1,0 +1,31 @@
+defaults:
+  - ref_psff_real_68_10k
+  - override model: psf_aware_drunet
+  - _self_
+
+condition_name: ohuf-psf-aware-real-68-v1
+measurement_domain: real
+
+protocol:
+  experiment: OHUF-PSF-AWARE-REAL-68-v1
+  purpose: matched PSF-aware backbone for OHUF
+
+datasets:
+  train:
+    return_psf: true
+  validation:
+    prepared_psf_bundle_path: data/ref_psff_real/prepared_psfs_v1.npz
+    return_psf: true
+
+trainer:
+  device_tensors: [measurement, psf, target]
+
+writer:
+  run_name: ohuf-psf-aware-real-68-seed${trainer.seed}
+  group: ohuf-matched-backbones
+  job_type: psf-aware-real-68
+  tags: [real, psf-aware, ohuf, matched, fixed-budget]
+
+hydra:
+  run:
+    dir: outputs/train/ohuf-psf-aware-real-68/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}

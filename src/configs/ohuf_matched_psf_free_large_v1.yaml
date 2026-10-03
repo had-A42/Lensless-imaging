@@ -1,0 +1,37 @@
+defaults:
+  - ref_psff_real_68_10k
+  - override datasets: digicam_ohuf_matched_large_v1
+  - _self_
+
+condition_name: ohuf-matched-large-v1-psf-free
+measurement_domain: real
+
+protocol:
+  experiment: OHUF-MATCHED-LARGE-v1
+  arm: psf_free
+  purpose: matched measurement-only backbone trained on calibration masks and scenes
+  calibration_mask_count: 68
+  outer_mask_count: 17
+  train_row_slots: [0, 199]
+  inner_validation_row_slots: [200, 224]
+  fusion_calibration_row_slots: [225, 232]
+  confirmation_row_slots: [233, 249]
+  official_test_accessed: false
+
+trainer:
+  save_period: 1
+  keep_last_checkpoints: 1
+  amp:
+    enabled: true
+    dtype: bfloat16
+
+writer:
+  run_name: ohuf-matched-large-v1-psf-free-seed${trainer.seed}
+  group: ohuf-matched-large-v1
+  job_type: psf-free
+  tags: [real, psf-free, ohuf, matched, mask-held-out, scene-held-out]
+  log_images: false
+
+hydra:
+  run:
+    dir: outputs/train/ohuf-matched-large-v1/psf-free/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}

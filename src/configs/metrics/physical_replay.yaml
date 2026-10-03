@@ -1,0 +1,34 @@
+device: auto
+
+train: []
+
+inference:
+  - _target_: src.metrics.PSNRMetric
+    data_range: 1.0
+    normalize_by_max: true
+    name: PSNR
+  - _target_: src.metrics.SSIMMetric
+    data_range: 1.0
+    normalize_by_max: true
+    name: SSIM
+  - _target_: src.metrics.LPIPSMetric
+    net_type: vgg
+    device: ${metrics.device}
+    normalize_by_max: true
+    name: LPIPS
+  - _target_: src.metrics.reconstruction.ReplayPSNRMetric
+    data_range: 1.0
+    normalize_by_max: true
+    name: Replay_PSNR
+  - _target_: src.metrics.reconstruction.ReplaySSIMMetric
+    data_range: 1.0
+    normalize_by_max: true
+    name: Replay_SSIM
+  - _target_: src.metrics.reconstruction.ReplayLPIPSMetric
+    net_type: vgg
+    device: ${metrics.device}
+    normalize_by_max: true
+    name: Replay_LPIPS
+  - _target_: src.metrics.reconstruction.PredictionRMSEMetric
+    normalize_by_max: true
+    name: Prediction_RMSE

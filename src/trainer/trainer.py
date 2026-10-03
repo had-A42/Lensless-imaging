@@ -38,7 +38,8 @@ class Trainer(BaseTrainer):
         metric_funcs = [] if paired_batch else self.metrics["inference"]
         if self.is_train:
             metric_funcs = self.metrics["train"]
-            self.optimizer.zero_grad()
+            if getattr(self, "_accumulation_start", True):
+                self.optimizer.zero_grad()
 
         with self.autocast_context():
             outputs = self.model(**batch)
@@ -60,28 +61,35 @@ class Trainer(BaseTrainer):
             )
 
         if self.is_train:
+            accumulation_steps = int(getattr(self, "accumulation_steps", 1))
+            backward_loss = loss / accumulation_steps
             grad_scaler = getattr(self, "grad_scaler", None)
             if grad_scaler is None:
-                loss.backward()  # sum of all losses is always called loss
+                backward_loss.backward()
             else:
-                grad_scaler.scale(loss).backward()
-                grad_scaler.unscale_(self.optimizer)
-            self._clip_grad_norm()
-            grad_norm = self._get_grad_norm()
-            if not math.isfinite(grad_norm):
-                raise FloatingPointError(
-                    "Non-finite gradient norm after backward and before "
-                    f"optimizer.step at global_step={getattr(self, 'global_step', 0)}, "
-                    f"sampler_step={getattr(self, 'sampler_step', 0)}: {grad_norm}"
-                )
-            batch["grad_norm"] = grad_norm
-            if grad_scaler is None:
-                self.optimizer.step()
-            else:
-                grad_scaler.step(self.optimizer)
-                grad_scaler.update()
-            if self.lr_scheduler is not None:
-                self.lr_scheduler.step()
+                grad_scaler.scale(backward_loss).backward()
+
+            optimizer_step = bool(getattr(self, "_accumulation_end", True))
+            batch["optimizer_step_performed"] = optimizer_step
+            if optimizer_step:
+                if grad_scaler is not None:
+                    grad_scaler.unscale_(self.optimizer)
+                self._clip_grad_norm()
+                grad_norm = self._get_grad_norm()
+                if not math.isfinite(grad_norm):
+                    raise FloatingPointError(
+                        "Non-finite gradient norm after backward and before "
+                        f"optimizer.step at global_step={getattr(self, 'global_step', 0)}, "
+                        f"sampler_step={getattr(self, 'sampler_step', 0)}: {grad_norm}"
+                    )
+                batch["grad_norm"] = grad_norm
+                if grad_scaler is None:
+                    self.optimizer.step()
+                else:
+                    grad_scaler.step(self.optimizer)
+                    grad_scaler.update()
+                if self.lr_scheduler is not None:
+                    self.lr_scheduler.step()
 
         batch_size = batch[self.device_tensor_names(batch)[0]].shape[0]
 

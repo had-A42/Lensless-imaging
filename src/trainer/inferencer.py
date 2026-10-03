@@ -63,6 +63,7 @@ class Inferencer(BaseTrainer):
         self.cfg_trainer = self.config.inferencer
 
         self.device = device
+        self._configure_amp()
 
         self.model = model
         self.batch_transforms = batch_transforms
@@ -135,7 +136,8 @@ class Inferencer(BaseTrainer):
         batch = self.move_batch_to_device(batch)
         batch = self.transform_batch(batch)  # transform batch on device -- faster
 
-        outputs = self.model(**batch)
+        with self.autocast_context():
+            outputs = self.model(**batch)
         batch.update(outputs)
 
         if getattr(self, "output_type", "classification") == "reconstruction":
@@ -243,6 +245,10 @@ class Inferencer(BaseTrainer):
                 "prediction": batch["prediction"][index].detach().cpu(),
                 "target": batch["target"][index].detach().cpu(),
             }
+            if "replay_prediction" in batch:
+                output["replay_prediction"] = batch["replay_prediction"][
+                    index
+                ].detach().cpu()
             for key in (
                 "sample_id",
                 "scene_id",

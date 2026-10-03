@@ -1,0 +1,57 @@
+defaults:
+  - mnist_cv1_eval
+  - override model: classical_physical_admm
+  - override metrics: mnist_physical_reference
+  - _self_
+
+psf_mode: "true"
+
+protocol:
+  experiment: review-structured-classical-physical-mnist-v1
+  information_regime: measurement + ${psf_mode} PSF
+  role: deterministic classical inference reference; no new learned training
+  display_normalization: per-image min-max after fixed ROI crop, same as structured controls
+
+model:
+  n_iter: 1600
+  mu1: 1.0e-4
+  mu2: 1.0e-4
+  mu3: 1.0e-4
+  tau: 2.0e-4
+  output_normalization: min_max
+
+datasets:
+  validation:
+    splits_path: ${oc.env:MNIST_REFERENCE_MANIFEST,manifests/mnist_physical_reference_dev100.json}
+
+dataloader_builder:
+  batch_size: 1
+  evaluation_mask_seed: 52
+  return_psf: true
+  operator_prompt_mode: ${psf_mode}
+  num_workers: 4
+  persistent_workers: false
+
+inferencer:
+  device: cuda
+  device_tensors: [measurement, psf, target]
+  skip_model_load: true
+  from_pretrained: null
+  example_indices: [0, 1, 2, 3, 9, 100, 1599, 3199]
+
+provenance:
+  experiment: review-structured-classical-physical-mnist-v1
+  official_structured_partitions_previously_accessed: true
+  selection_on_official_test: false
+
+writer:
+  mode: offline
+  run_name: review-mnist-classical-physical-${psf_mode}-v1
+  group: coursework-review-structured-classical-physical-v1
+  job_type: deterministic-reference
+  tags: [mnist, psf-aware, classical-admm, structured-diagnostic]
+  log_images: false
+
+hydra:
+  run:
+    dir: outputs/coursework_review_structured_physics_v1_20260916/${writer.run_name}

@@ -1,0 +1,16 @@
+defaults:
+  - ohuf_published_confirmation_eval
+  - override model: ohuf_published_proposal
+  - _self_
+
+condition_name: ohuf-published-baseline-confirmation
+
+provenance:
+  experiment: OHUF-DEV-01-BASELINE
+
+inferencer:
+  save_path: ohuf-published-baseline-confirmation
+
+hydra:
+  run:
+    dir: outputs/inference/ohuf-published-baseline/${now:%Y-%m-%d_%H-%M-%S}

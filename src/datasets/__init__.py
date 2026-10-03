@@ -1,4 +1,5 @@
 from src.datasets.digicam import DigiCamRealDataset
+from src.datasets.digicam_mask_rows import DigiCamMaskRowDataset
 from src.datasets.digicam_matched import DigiCamMatchedDomainDataset
 from src.datasets.mirflickr import MirFlickrSceneDataset
 from src.datasets.mnist import MNISTSceneDataset
@@ -14,6 +15,7 @@ from src.datasets.on_the_fly import (
 
 __all__ = [
     "DigiCamRealDataset",
+    "DigiCamMaskRowDataset",
     "DigiCamMatchedDomainDataset",
     "MirFlickrSceneDataset",
     "MNISTSceneDataset",

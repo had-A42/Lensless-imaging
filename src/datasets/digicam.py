@@ -33,6 +33,8 @@ class DigiCamRealDataset(Dataset):
         target_size: list[int] | None = None,
         target_resize_mode: str = "bilinear",
         return_psf: bool = False,
+        return_replay_psf: bool = False,
+        prepared_psf_bundle_path: str | Path | None = None,
         simulator_config: Any | None = None,
         expected_mask_count: int | None = None,
         expected_scenes_per_mask: int | None = None,
@@ -47,7 +49,7 @@ class DigiCamRealDataset(Dataset):
             raise ValueError("index_start must be non-negative")
         if target_resize_mode not in {"bilinear", "nearest"}:
             raise ValueError("target_resize_mode must be bilinear or nearest")
-        if return_psf and revision is None:
+        if (return_psf or return_replay_psf) and revision is None:
             raise ValueError("revision is required when return_psf is enabled")
         if target_size is not None:
             if len(target_size) != 2 or any(int(value) <= 0 for value in target_size):
@@ -71,7 +73,13 @@ class DigiCamRealDataset(Dataset):
         self.measurement_downsample = float(measurement_downsample)
         self.target_size = target_size
         self.target_resize_mode = target_resize_mode
-        self.return_psf = bool(return_psf)
+        self.return_replay_psf = bool(return_replay_psf)
+        self.return_psf = bool(return_psf or self.return_replay_psf)
+        self.prepared_psf_bundle_path = (
+            Path(prepared_psf_bundle_path).expanduser().resolve()
+            if prepared_psf_bundle_path is not None
+            else None
+        )
         self.simulator_config = simulator_config
         self.index_start = int(index_start)
 
@@ -84,11 +92,12 @@ class DigiCamRealDataset(Dataset):
         self.source_dataset = source_dataset
         self.indices = self._normalize_indices(indices)
         self.psfs = {}
+        self.psf_mask_ids = ()
         if self.return_psf:
             self._prepare_psfs(expected_mask_count, expected_scenes_per_mask)
 
     def _prepare_psfs(self, expected_mask_count, expected_scenes_per_mask):
-        if self.simulator_config is None:
+        if self.simulator_config is None and self.prepared_psf_bundle_path is None:
             raise ValueError("simulator_config is required when return_psf is enabled")
 
         mask_column = self.source_dataset[self.mask_key]
@@ -104,6 +113,27 @@ class DigiCamRealDataset(Dataset):
                 "each mask must have "
                 f"{expected_scenes_per_mask} scenes, found {counts}"
             )
+
+        if self.prepared_psf_bundle_path is not None:
+            if not self.prepared_psf_bundle_path.is_file():
+                raise FileNotFoundError(self.prepared_psf_bundle_path)
+            with np.load(self.prepared_psf_bundle_path, allow_pickle=False) as bundle:
+                for mask_id in sorted(counts):
+                    key = f"mask_{mask_id}"
+                    if key not in bundle:
+                        raise KeyError(
+                            f"prepared PSF bundle is missing {key}: "
+                            f"{self.prepared_psf_bundle_path}"
+                        )
+                    psf = torch.as_tensor(bundle[key], dtype=torch.float32)
+                    if psf.ndim == 4 and psf.shape[0] == 1:
+                        psf = psf.squeeze(0).movedim(-1, 0)
+                    if psf.ndim != 3 or psf.shape[0] not in (1, 3):
+                        raise ValueError(f"invalid prepared PSF shape for {key}")
+                    psf = psf / psf.norm().clamp_min(1e-12)
+                    self.psfs[mask_id] = psf.contiguous()
+            self.psf_mask_ids = tuple(sorted(self.psfs))
+            return
 
         for mask_id in sorted(counts):
             path = hf_hub_download(
@@ -125,6 +155,7 @@ class DigiCamRealDataset(Dataset):
             psf = psf / psf.norm()
             psf = psf.contiguous()
             self.psfs[mask_id] = psf
+        self.psf_mask_ids = tuple(sorted(self.psfs))
 
     def _load_huggingface_dataset(self):
         try:
@@ -231,6 +262,13 @@ class DigiCamRealDataset(Dataset):
         if self.return_psf:
             mask_id = int(mask_id)
             sample["psf"] = self.psfs[mask_id]
+            if self.return_replay_psf:
+                mask_index = self.psf_mask_ids.index(mask_id)
+                replay_mask_id = self.psf_mask_ids[
+                    (mask_index + 1) % len(self.psf_mask_ids)
+                ]
+                sample["replay_psf"] = self.psfs[replay_mask_id]
+                sample["replay_mask_id"] = replay_mask_id
         return sample
 
     def _image_to_chw_float(self, image: Any, field: str) -> torch.Tensor:

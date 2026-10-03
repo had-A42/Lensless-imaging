@@ -1,0 +1,10 @@
+confirmation:
+  _target_: src.datasets.digicam_mask_rows.DigiCamMaskRowDataset
+  repo_id: bezzam/DigiCam-Mirflickr-MultiMask-25K
+  revision: 21d82b67662ed1e590a40c98688c32cb3c74f079
+  split: train
+  cache_dir: ${oc.env:HF_HOME,./data/huggingface}
+  mask_ids: [24, 19, 88, 57, 27, 26, 32, 64, 16, 86, 15, 91, 44, 36, 20, 60]
+  row_slots: [120, 121, 122, 123]
+  target_size: [200, 266]
+  rotate_measurement: true

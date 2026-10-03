@@ -1,0 +1,44 @@
+defaults:
+  - e01_psf_free_eval
+  - override model: psf_free_xrestormer
+  - _self_
+
+condition_name: review-xrest-finite100
+
+protocol:
+  experiment: review-xrest-lower-lr-and-accumulation-eval-v1
+  endpoint_policy: final 50k checkpoint
+
+model:
+  checkpoint_path: null
+  strict_checkpoint: true
+  output_crop: ${protocol.roi}
+  operator_prompt: none
+
+dataloader_builder:
+  batch_size: 1
+  num_workers: 4
+  persistent_workers: false
+
+metrics:
+  device: ${inferencer.device}
+
+inferencer:
+  device: cuda
+  device_tensors: [measurement, target]
+  from_pretrained: null
+  skip_model_load: false
+  amp:
+    enabled: true
+    dtype: bfloat16
+
+writer:
+  run_name: review-xrest-eval
+  group: coursework-review-xrest-eval-v1
+  job_type: final-50k
+  tags: [synthetic, psf-free, xrestormer, lower-lr, evaluation]
+  log_images: false
+
+hydra:
+  run:
+    dir: outputs/coursework_review_optimization_v1_20260916/evaluation/${writer.run_name}

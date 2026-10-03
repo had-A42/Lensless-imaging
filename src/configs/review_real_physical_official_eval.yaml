@@ -1,0 +1,41 @@
+defaults:
+  - e01_psf_free_real_eval
+  - override model: physical_unrolled_admm
+  - override metrics: physical_replay
+  - _self_
+
+condition_name: review-real-physical-official15
+
+protocol:
+  experiment: review-real-physical-official15-v1
+  information_regime: real measurement + correct/cyclic-wrong generated PSF
+  selection_on_this_partition: false
+
+datasets:
+  test:
+    return_psf: true
+    return_replay_psf: true
+    prepared_psf_bundle_path: data/ref_psff_real/prepared_psfs_official15_v2.npz
+
+model:
+  output_crop: [80, 100, 200, 266]
+
+metrics:
+  device: ${inferencer.device}
+
+inferencer:
+  device: cuda
+  device_tensors: [measurement, psf, replay_psf, target]
+  from_pretrained: null
+  skip_model_load: false
+
+writer:
+  run_name: review-real-physical-official15-replay
+  group: coursework-review-real-physical-official15-v1
+  job_type: correct-vs-cyclic-wrong
+  tags: [real, official15, psf-aware, physical, unrolled-admm, psf-replay]
+  log_images: false
+
+hydra:
+  run:
+    dir: outputs/coursework_review_physics_v1_20260916/official15/${writer.run_name}

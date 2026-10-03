@@ -1,0 +1,28 @@
+defaults:
+  - ohuf_matched_psf_free_large_v1
+  - override model: psf_aware_drunet
+  - _self_
+
+condition_name: ohuf-matched-large-v1-psf-aware
+
+protocol:
+  arm: psf_aware
+  purpose: matched PSF-conditioned backbone trained on calibration masks and scenes
+
+datasets:
+  train:
+    return_psf: true
+  validation:
+    return_psf: true
+
+trainer:
+  device_tensors: [measurement, psf, target]
+
+writer:
+  run_name: ohuf-matched-large-v1-psf-aware-seed${trainer.seed}
+  job_type: psf-aware
+  tags: [real, psf-aware, ohuf, matched, mask-held-out, scene-held-out]
+
+hydra:
+  run:
+    dir: outputs/train/ohuf-matched-large-v1/psf-aware/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}

@@ -1,0 +1,61 @@
+defaults:
+  - ref_psff_real_68_10k
+  - override model: physical_unrolled_admm
+  - override metrics: physical_replay
+  - override datasets: digicam_ref_psff_real_68_eval
+  - _self_
+
+condition_name: review-real68-physical-replay-v1
+measurement_domain: real
+
+protocol:
+  experiment: review-real68-physical-replay-v1
+  information_regime: real measurement + correct/cyclic-wrong prepared PSF
+  row_protocol: legacy_v1
+
+dataloader:
+  batch_size: 4
+  num_workers: 8
+  persistent_workers: false
+  shuffle: false
+  drop_last: false
+
+model:
+  output_crop: [80, 100, 200, 266]
+
+metrics:
+  device: ${inferencer.device}
+
+inferencer:
+  device_tensors: [measurement, psf, replay_psf, target]
+  device: cuda
+  seed: 42
+  output_type: reconstruction
+  save_dir: saved
+  from_pretrained: null
+  skip_model_load: false
+  override: false
+  example_indices: [0, 249, 250, 849, 1699]
+
+writer:
+  run_name: review-real68-physical-replay
+  group: coursework-review-real-physical-replay-v1
+  job_type: correct-vs-cyclic-wrong
+  tags: [real, psf-aware, physical, unrolled-admm, psf-replay]
+  loss_names: []
+  log_images: false
+  log_checkpoints: false
+  log_best_checkpoint_at_end: false
+
+provenance:
+  experiment: review-real68-physical-replay-v1
+  dataset_repo: bezzam/DigiCam-Mirflickr-MultiMask-25K
+  dataset_revision: 21d82b67662ed1e590a40c98688c32cb3c74f079
+  row_protocol: legacy_v1
+  expected_samples: 1700
+  expected_masks: 68
+  expected_scenes_per_mask: 25
+
+hydra:
+  run:
+    dir: outputs/coursework_review_physics_v1_20260916/real_replay/${writer.run_name}

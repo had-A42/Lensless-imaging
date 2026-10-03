@@ -38,6 +38,7 @@ pip-delete-this-directory.txt
 # Unit test / coverage reports
 htmlcov/
 .tox/
+.pytest_cache/
 .coverage
 .coverage.*
 .cache
@@ -113,15 +114,26 @@ ENV/
 data/
 input/
 model_weights/
+*.pth
+*.pt
+*.ckpt
+*.safetensors
 saved/
 wandb/
 .cometml-runs/
 outputs/
 multirun/
+run_logs/
 
 results/
 
 # editor, os cache directory
+.DS_Store
 .vscode/
 .idea/
 __MACOSX/
+*.tmp
+*.temp
+*.swp
+*.swo
+*~

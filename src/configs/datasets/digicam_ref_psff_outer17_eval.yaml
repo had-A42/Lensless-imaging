@@ -1,0 +1,16 @@
+validation:
+  _target_: src.datasets.digicam_mask_rows.DigiCamMaskRowDataset
+  mask_ids: [41, 24, 19, 88, 57, 27, 26, 32, 64, 16, 86, 15, 91, 44, 36, 20, 60]
+  row_slots: null
+  row_slot_start: 0
+  row_slot_count: 250
+  repo_id: bezzam/DigiCam-Mirflickr-MultiMask-25K
+  revision: 21d82b67662ed1e590a40c98688c32cb3c74f079
+  split: train
+  cache_dir: ${oc.env:HF_HOME,./data/huggingface}
+  target_size: [200, 266]
+  rotate_measurement: true
+  return_psf: true
+  return_replay_psf: true
+  prepared_psf_bundle_path: data/ref_psff_real/prepared_psfs_outer17_v2.npz
+  simulator_config: ${simulator}

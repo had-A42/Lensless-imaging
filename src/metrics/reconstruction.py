@@ -166,6 +166,27 @@ class PooledSSIMMetric(SSIMMetric):
         return super().per_image(prediction, target, **batch)
 
 
+class PooledDiceLossMetric(BaseMetric):
+    def __init__(self, pooling_factor=8, eps=1e-8, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.pooling_factor = int(pooling_factor)
+        self.eps = float(eps)
+        if self.eps <= 0:
+            raise ValueError("eps must be positive")
+
+    def per_image(self, prediction, target, **batch):
+        prediction, target = _average_pool_pair(
+            prediction.float(), target.float(), self.pooling_factor
+        )
+        intersection = (prediction * target).flatten(1).sum(dim=1)
+        total = prediction.square().flatten(1).sum(dim=1)
+        total = total + target.square().flatten(1).sum(dim=1)
+        return (1 - (2 * intersection + self.eps) / (total + self.eps)).detach()
+
+    def __call__(self, prediction, target, **batch):
+        return self.per_image(prediction, target, **batch).mean()
+
+
 class LPIPSMetric(BaseMetric):
     def __init__(
         self,
@@ -245,3 +266,64 @@ class LPIPSMetric(BaseMetric):
         self, prediction: torch.Tensor, target: torch.Tensor, **batch
     ) -> torch.Tensor:
         return self.per_image(prediction, target, **batch).mean()
+
+
+class ReplayPSNRMetric(PSNRMetric):
+    def per_image(self, replay_prediction, target, **batch):
+        batch.pop("prediction", None)
+        return super().per_image(replay_prediction, target, **batch)
+
+    def __call__(self, replay_prediction, target, **batch):
+        return self.per_image(replay_prediction, target, **batch).mean()
+
+
+class ReplaySSIMMetric(SSIMMetric):
+    def per_image(self, replay_prediction, target, **batch):
+        batch.pop("prediction", None)
+        return super().per_image(replay_prediction, target, **batch)
+
+    def __call__(self, replay_prediction, target, **batch):
+        return self.per_image(replay_prediction, target, **batch).mean()
+
+
+class ReplayLPIPSMetric(LPIPSMetric):
+    def per_image(self, replay_prediction, target, **batch):
+        batch.pop("prediction", None)
+        return super().per_image(replay_prediction, target, **batch)
+
+    def __call__(self, replay_prediction, target, **batch):
+        return self.per_image(replay_prediction, target, **batch).mean()
+
+
+class PredictionRMSEMetric(BaseMetric):
+    def __init__(
+        self,
+        normalize_by_max=True,
+        normalization_eps=1e-8,
+        *args,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        self.normalize_by_max = bool(normalize_by_max)
+        self.normalization_eps = float(normalization_eps)
+        if self.normalization_eps <= 0:
+            raise ValueError("normalization_eps must be positive")
+
+    def per_image(self, prediction, replay_prediction, **batch):
+        prediction, replay_prediction = _prepare_pair(
+            prediction,
+            replay_prediction,
+            normalize_by_max=self.normalize_by_max,
+            normalization_eps=self.normalization_eps,
+        )
+        return (
+            (prediction - replay_prediction)
+            .square()
+            .flatten(1)
+            .mean(dim=1)
+            .sqrt()
+            .detach()
+        )
+
+    def __call__(self, prediction, replay_prediction, **batch):
+        return self.per_image(prediction, replay_prediction, **batch).mean()

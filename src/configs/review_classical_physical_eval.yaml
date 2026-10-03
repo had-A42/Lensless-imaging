@@ -1,0 +1,38 @@
+defaults:
+  - e01_psf_free_eval
+  - override model: classical_physical_admm
+  - _self_
+
+condition_name: classical-physical-admm
+
+protocol:
+  experiment: review-classical-physical-admm-v1
+  information_regime: measurement + exact corresponding PSF
+  scale_rule: reconstructed intensity estimated from measurement; metrics normalize prediction and target independently by per-image maximum
+
+model:
+  output_crop: ${protocol.roi}
+
+dataloader_builder:
+  batch_size: 1
+  return_psf: true
+  operator_prompt_mode: none
+  num_workers: 4
+  persistent_workers: false
+
+inferencer:
+  device: cuda
+  device_tensors: [measurement, psf, target]
+  skip_model_load: true
+  save_path: review-classical-physical-admm
+
+writer:
+  run_name: review-classical-physical-admm
+  group: coursework-review-classical-physical-v1
+  job_type: parameter-grid
+  tags: [synthetic, psf-aware, physical, classical-admm, supervisor-review]
+  log_images: false
+
+hydra:
+  run:
+    dir: outputs/coursework_review_physics_v1_20260916/classical/${writer.run_name}

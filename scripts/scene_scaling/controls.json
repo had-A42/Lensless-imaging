@@ -1,0 +1,102 @@
+[
+  {
+    "id": "scratch-seed42",
+    "arm": "scratch",
+    "seed": 42,
+    "source_config": "wandb/remote-a800/cleanup-metadata-20260831/Lensless-imaging-night-73e432d/saved/a800-xrest-cv1-scratch-50k-seed42-73e432d-r1/config.yaml",
+    "checkpoint_candidates": [
+      "saved/a800-xrest-cv1-scratch-50k-seed42-73e432d-r1/checkpoint-epoch5.pth",
+      "/home/hadhad/project/Lensless-imaging-night-73e432d/saved/a800-xrest-cv1-scratch-50k-seed42-73e432d-r1/checkpoint-epoch5.pth"
+    ],
+    "legacy32_metrics": {
+      "PSNR": 14.020002384670079,
+      "SSIM": 0.30162968458171235,
+      "LPIPS": 0.5811814663175028
+    },
+    "expected_checkpoint_sha256": "e051e212b31eba74e32ea88990916c87032eb57b03f9187ece91be3fe14bbbe4"
+  },
+  {
+    "id": "gopro-seed42",
+    "arm": "gopro",
+    "seed": 42,
+    "source_config": "wandb/remote-a800/cleanup-metadata-20260831/Lensless-imaging-night-73e432d/saved/a800-xrest-cv1-gopro-50k-seed42-73e432d-r1/config.yaml",
+    "checkpoint_candidates": [
+      "saved/a800-xrest-cv1-gopro-50k-seed42-73e432d-r1/checkpoint-epoch5.pth",
+      "/home/hadhad/project/Lensless-imaging-night-73e432d/saved/a800-xrest-cv1-gopro-50k-seed42-73e432d-r1/checkpoint-epoch5.pth"
+    ],
+    "legacy32_metrics": {
+      "PSNR": 14.568507018964738,
+      "SSIM": 0.32334125348643283,
+      "LPIPS": 0.5717943694908172
+    },
+    "expected_checkpoint_sha256": "31b9823dd34ec4192b90b5eabd7f41c070acb66411c5169a9a4357c614eced83"
+  },
+  {
+    "id": "scratch-seed52",
+    "arm": "scratch",
+    "seed": 52,
+    "source_config": "saved/cv1-xrest-scratch-finite-100-50000step-seed52-508a878-r2/config.yaml",
+    "checkpoint_candidates": [
+      "saved/cv1-xrest-scratch-finite-100-50000step-seed52-508a878-r2/checkpoint-epoch5.pth",
+      "saved/cv1-xrest-scratch-finite-100-50000step-seed52-508a878-r2/model_best.pth",
+      "/home/hadhad/project/Lensless-imaging-research-508a878/saved/cv1-xrest-scratch-finite-100-50000step-seed52-508a878-r2/checkpoint-epoch5.pth",
+      "/home/hadhad/project/Lensless-imaging-research-508a878/saved/cv1-xrest-scratch-finite-100-50000step-seed52-508a878-r2/model_best.pth"
+    ],
+    "legacy32_metrics": {
+      "PSNR": 13.927723457105458,
+      "SSIM": 0.2932857684936607,
+      "LPIPS": 0.5849723182909656
+    }
+  },
+  {
+    "id": "gopro-seed52",
+    "arm": "gopro",
+    "seed": 52,
+    "source_config": "saved/cv1-xrest-gopro-finite-100-50000step-seed52-508a878-r2/config.yaml",
+    "checkpoint_candidates": [
+      "saved/cv1-xrest-gopro-finite-100-50000step-seed52-508a878-r2/checkpoint-epoch5.pth",
+      "saved/cv1-xrest-gopro-finite-100-50000step-seed52-508a878-r2/model_best.pth",
+      "/home/hadhad/project/Lensless-imaging-research-508a878/saved/cv1-xrest-gopro-finite-100-50000step-seed52-508a878-r2/checkpoint-epoch5.pth",
+      "/home/hadhad/project/Lensless-imaging-research-508a878/saved/cv1-xrest-gopro-finite-100-50000step-seed52-508a878-r2/model_best.pth"
+    ],
+    "legacy32_metrics": {
+      "PSNR": 14.636014399118721,
+      "SSIM": 0.3224752023052133,
+      "LPIPS": 0.5665876057464629
+    }
+  },
+  {
+    "id": "scratch-seed62",
+    "arm": "scratch",
+    "seed": 62,
+    "source_config": "saved/cv1-xrest-scratch-finite-100-50000step-seed62-508a878-r2/config.yaml",
+    "checkpoint_candidates": [
+      "saved/cv1-xrest-scratch-finite-100-50000step-seed62-508a878-r2/checkpoint-epoch5.pth",
+      "saved/cv1-xrest-scratch-finite-100-50000step-seed62-508a878-r2/model_best.pth",
+      "/home/hadhad/project/Lensless-imaging-research-508a878/saved/cv1-xrest-scratch-finite-100-50000step-seed62-508a878-r2/checkpoint-epoch5.pth",
+      "/home/hadhad/project/Lensless-imaging-research-508a878/saved/cv1-xrest-scratch-finite-100-50000step-seed62-508a878-r2/model_best.pth"
+    ],
+    "legacy32_metrics": {
+      "PSNR": 13.87798957247287,
+      "SSIM": 0.29936540183553007,
+      "LPIPS": 0.584686279296875
+    }
+  },
+  {
+    "id": "gopro-seed62",
+    "arm": "gopro",
+    "seed": 62,
+    "source_config": "saved/cv1-xrest-gopro-finite-100-50000step-seed62-508a878-r2/config.yaml",
+    "checkpoint_candidates": [
+      "saved/cv1-xrest-gopro-finite-100-50000step-seed62-508a878-r2/checkpoint-epoch5.pth",
+      "saved/cv1-xrest-gopro-finite-100-50000step-seed62-508a878-r2/model_best.pth",
+      "/home/hadhad/project/Lensless-imaging-research-508a878/saved/cv1-xrest-gopro-finite-100-50000step-seed62-508a878-r2/checkpoint-epoch5.pth",
+      "/home/hadhad/project/Lensless-imaging-research-508a878/saved/cv1-xrest-gopro-finite-100-50000step-seed62-508a878-r2/model_best.pth"
+    ],
+    "legacy32_metrics": {
+      "PSNR": 14.410580999217927,
+      "SSIM": 0.3087672412111715,
+      "LPIPS": 0.5782809752272442
+    }
+  }
+]

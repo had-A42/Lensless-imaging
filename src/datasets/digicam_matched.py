@@ -12,6 +12,12 @@ from src.datasets.digicam import DigiCamRealDataset
 from src.datasets.on_the_fly import _aligned_measurement
 from src.digicam_protocol import build_digicam_mask_split
 
+OHUF_LARGE_ROW_PROTOCOL = "ohuf_large_v1"
+OHUF_LARGE_TRAIN_ROW_SLOTS = tuple(range(0, 200))
+OHUF_LARGE_VALIDATION_ROW_SLOTS = tuple(range(200, 225))
+OHUF_LARGE_FUSION_CALIBRATION_ROW_SLOTS = tuple(range(225, 233))
+OHUF_LARGE_CONFIRMATION_ROW_SLOTS = tuple(range(233, 250))
+
 
 def build_row_slot_split(
     seed: int = 20260827,
@@ -32,15 +38,38 @@ def _source_index(mask_id: int, row_slot: int) -> int:
     return int(row_slot) * 85 + int(mask_id) - 15
 
 
-def _rows(role: str) -> list[dict[str, int]]:
+def build_ohuf_large_row_slot_split() -> dict[str, list[int]]:
+    """Return the frozen, globally scene-disjoint OHUF large-study split."""
+
+    split = {
+        "train": list(OHUF_LARGE_TRAIN_ROW_SLOTS),
+        "inner_validation": list(OHUF_LARGE_VALIDATION_ROW_SLOTS),
+        "fusion_calibration": list(OHUF_LARGE_FUSION_CALIBRATION_ROW_SLOTS),
+        "confirmation": list(OHUF_LARGE_CONFIRMATION_ROW_SLOTS),
+    }
+    flattened = [slot for slots in split.values() for slot in slots]
+    if sorted(flattened) != list(range(250)) or len(flattened) != len(set(flattened)):
+        raise RuntimeError("invalid OHUF large-study row protocol")
+    return split
+
+
+def _rows(role: str, row_protocol: str = "legacy_v1") -> list[dict[str, int]]:
     development_masks, _ = build_digicam_mask_split()
-    train_slots, validation_slots = build_row_slot_split()
-    if role == "train":
-        slots = train_slots
-    elif role == "inner_validation":
-        slots = validation_slots
+    if row_protocol == "legacy_v1":
+        train_slots, validation_slots = build_row_slot_split()
+        if role == "train":
+            slots = train_slots
+        elif role == "inner_validation":
+            slots = validation_slots
+        else:
+            raise ValueError("role must be train or inner_validation")
+    elif row_protocol == OHUF_LARGE_ROW_PROTOCOL:
+        split = build_ohuf_large_row_slot_split()
+        if role not in {"train", "inner_validation"}:
+            raise ValueError("training datasets permit train or inner_validation roles")
+        slots = split[role]
     else:
-        raise ValueError("role must be train or inner_validation")
+        raise ValueError(f"unknown row protocol: {row_protocol}")
     return sorted(
         (
             {
@@ -69,6 +98,9 @@ class DigiCamMatchedDomainDataset(Dataset):
         source_dataset: Any | None = None,
         prepared_psf_bundle_path: str | Path | None = None,
         convolver_cache_size: int = 2,
+        return_psf: bool = False,
+        return_replay_psf: bool = False,
+        row_protocol: str = "legacy_v1",
     ) -> None:
         if measurement_domain not in {"real", "matched_sim"}:
             raise ValueError("measurement_domain must be real or matched_sim")
@@ -82,7 +114,7 @@ class DigiCamMatchedDomainDataset(Dataset):
                 indices=[],
             ).source_dataset
 
-        self.rows = _rows(role)
+        self.rows = _rows(role, row_protocol=row_protocol)
         self.base = DigiCamRealDataset(
             repo_id=repo_id,
             revision=revision,
@@ -98,15 +130,22 @@ class DigiCamMatchedDomainDataset(Dataset):
         )
         self.role = role
         self.measurement_domain = measurement_domain
+        self.return_replay_psf = bool(return_replay_psf)
+        self.return_psf = bool(return_psf or self.return_replay_psf)
+        self.row_protocol = str(row_protocol)
         self.convolver_cache_size = int(convolver_cache_size)
         self.convolver_cache: OrderedDict[int, RealFFTConvolve2D] = OrderedDict()
         self.prepared_psfs: dict[int, np.ndarray] = {}
+        self.psf_mask_ids: tuple[int, ...] = ()
 
-        if measurement_domain == "matched_sim":
+        if measurement_domain == "matched_sim" or self.return_psf:
             if prepared_psf_bundle_path is None:
-                raise ValueError("matched_sim needs prepared_psf_bundle_path")
+                raise ValueError(
+                    "matched_sim and return_psf need prepared_psf_bundle_path"
+                )
             path = Path(to_absolute_path(str(prepared_psf_bundle_path)))
             development_masks, _ = build_digicam_mask_split()
+            self.psf_mask_ids = tuple(sorted(int(mask_id) for mask_id in development_masks))
             with np.load(path, allow_pickle=False) as bundle:
                 for mask_id in development_masks:
                     self.prepared_psfs[int(mask_id)] = np.ascontiguousarray(
@@ -141,15 +180,38 @@ class DigiCamMatchedDomainDataset(Dataset):
                 [80, 100, 200, 266],
                 quantize=True,
             )
+        if self.return_psf:
+            psf = torch.as_tensor(
+                self.prepared_psfs[mask_id], dtype=torch.float32
+            ).squeeze(0)
+            psf = psf.movedim(-1, 0).contiguous()
+            sample["psf"] = psf / psf.norm().clamp_min(1e-12)
+        if self.return_replay_psf:
+            mask_index = self.psf_mask_ids.index(mask_id)
+            replay_mask_id = self.psf_mask_ids[
+                (mask_index + 1) % len(self.psf_mask_ids)
+            ]
+            replay_psf = torch.as_tensor(
+                self.prepared_psfs[replay_mask_id], dtype=torch.float32
+            ).squeeze(0)
+            replay_psf = replay_psf.movedim(-1, 0).contiguous()
+            sample["replay_psf"] = replay_psf / replay_psf.norm().clamp_min(1e-12)
+            sample["replay_mask_id"] = replay_mask_id
         sample.update(
             {
                 "source_index": row["source_index"],
                 "row_slot": row["row_slot"],
                 "protocol_role": self.role,
+                "row_protocol": self.row_protocol,
                 "measurement_domain": self.measurement_domain,
             }
         )
         return sample
 
 
-__all__ = ["DigiCamMatchedDomainDataset", "build_row_slot_split"]
+__all__ = [
+    "DigiCamMatchedDomainDataset",
+    "OHUF_LARGE_ROW_PROTOCOL",
+    "build_ohuf_large_row_slot_split",
+    "build_row_slot_split",
+]

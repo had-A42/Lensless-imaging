@@ -1,0 +1,258 @@
+model:
+  _target_: src.model.psf_free_xrestormer.PSFFreeXRestormer
+  channels: 3
+  dim: 48
+  num_blocks:
+  - 2
+  - 4
+  - 4
+  - 4
+  num_refinement_blocks: 4
+  channel_heads:
+  - 1
+  - 2
+  - 4
+  - 8
+  spatial_heads:
+  - 1
+  - 2
+  - 4
+  - 8
+  overlap_ratio:
+  - 0.5
+  - 0.5
+  - 0.5
+  - 0.5
+  window_size: 8
+  spatial_dim_head: 16
+  expansion_factor: 2.66
+  bias: false
+  layer_norm_type: WithBias
+  padding_size: 64
+  checkpoint_path: ${initialization.checkpoint_path}
+  strict_checkpoint: true
+  output_crop: ${protocol.roi}
+  operator_prompt: none
+  operator_code_dim: 16
+  operator_hidden_dim: 128
+writer:
+  _target_: src.logger.WandBWriter
+  project_name: lensless-imaging
+  entity: had-2005-hse-university
+  run_name: cv1-xrest-gopro-finite-100-50000step-seed62-508a878-r2
+  mode: offline
+  loss_names:
+  - loss
+  - mse_loss
+  - lpips_loss
+  log_checkpoints: false
+  log_best_checkpoint_at_end: false
+  log_images: false
+  image_log_step: 1000
+  max_images: 4
+  save_code: false
+  log_git_state: false
+  id_length: 8
+  group: cv1-legacy-and-100k
+  job_type: ${initialization_name}
+  tags:
+  - synthetic
+  - psf-free
+  - article-resolution
+  - pretrain
+  - xrestormer
+  - screen
+  run_id: gp539m2b
+metrics:
+  device: auto
+  train:
+  - _target_: src.metrics.PSNRMetric
+    data_range: 1.0
+    normalize_by_max: true
+    normalization_eps: 1.0e-08
+    name: PSNR
+  - _target_: src.metrics.SSIMMetric
+    data_range: 1.0
+    normalize_by_max: true
+    normalization_eps: 1.0e-08
+    name: SSIM
+  inference:
+  - _target_: src.metrics.PSNRMetric
+    data_range: 1.0
+    normalize_by_max: true
+    normalization_eps: 1.0e-08
+    name: PSNR
+  - _target_: src.metrics.SSIMMetric
+    data_range: 1.0
+    normalize_by_max: true
+    normalization_eps: 1.0e-08
+    name: SSIM
+  - _target_: src.metrics.LPIPSMetric
+    net_type: vgg
+    device: ${metrics.device}
+    normalize_by_max: true
+    normalization_eps: 1.0e-08
+    name: LPIPS
+datasets:
+  train:
+    _target_: src.datasets.MirFlickrSceneDataset
+    root_dir: data/raw/mirflickr25k/extracted
+    splits_path: manifests/mirflickr25k_splits.json
+    split: train
+    image_size: null
+    verify_files: true
+  validation:
+    _target_: src.datasets.MirFlickrSceneDataset
+    root_dir: data/raw/mirflickr25k/extracted
+    splits_path: manifests/mirflickr25k_splits.json
+    split: validation
+    image_size: null
+    verify_files: true
+dataloader_builder:
+  _target_: src.datasets.build_on_the_fly_dataloaders
+  train_mode: ${mask_mode}
+  finite_mask_count: ${mask_count}
+  train_steps: ${trainer.total_steps}
+  validation_mask_count: 32
+  validation_scenes_per_mask: 32
+  batch_size: 1
+  run_seed: ${trainer.seed}
+  base_mask_seed: 42
+  validation_seed: 52
+  num_workers: 8
+  pin_memory: true
+  prefetch_factor: 2
+  persistent_workers: false
+  measurement_size: null
+  target_size:
+  - 200
+  - 266
+  simulation_mode: roi_convolution
+  roi:
+  - 80
+  - 100
+  - 200
+  - 266
+  finite_cache_size: 2
+  psf_cache:
+    mode: read_write
+    root_dir: data/psf_cache
+    request_modes:
+    - finite
+    warmup: false
+  train_mask_seed: ${trainer.seed}
+  evaluation_mask_seed: 42
+simulator:
+  dtype: float32
+  output_dtype: float32
+  use_torch: true
+  torch_device: cpu
+  grayscale: false
+  pattern:
+    shape:
+    - 54
+    - 26
+    dist_type: uniform
+    min_val: 0.0
+    max_val: 1.0
+    bernoulli_p: 0.5
+    gaussian_std: 0.25
+  optics:
+    sensor: rpi_hq
+    slm: adafruit
+    downsample: 8
+    object_height: 0.04
+    use_rotate: false
+    rotate_min: 0.0
+    rotate_max: 0.0
+    use_vertical_shift: false
+    vertical_shift_min: 0
+    vertical_shift_max: 0
+    use_horizontal_shift: false
+    horizontal_shift_min: 0
+    horizontal_shift_max: 0
+    flipud: true
+    deadspace: true
+    use_waveprop: true
+    scene2mask_min: 0.3
+    scene2mask_max: 0.3
+    mask2sensor_min: 0.002
+    mask2sensor_max: 0.002
+    min_val: 0.0
+    max_val: 255
+    quantize: true
+    return_float: true
+    snr_db: null
+condition_name: ${scale_condition.name}
+mask_mode: ${scale_condition.mask_mode}
+mask_count: ${scale_condition.mask_count}
+protocol:
+  measurement_shape:
+  - 3
+  - 380
+  - 507
+  target_shape:
+  - 3
+  - 200
+  - 266
+  roi:
+  - 80
+  - 100
+  - 200
+  - 266
+  simulation: aligned ROI canvas convolved with a fixed-geometry DigiCam PSF
+  version: corrected-v1
+  queue: cv1-legacy-and-100k-20260902
+optimizer:
+  _target_: torch.optim.Adam
+  lr: 0.0001
+  weight_decay: 0.0
+lr_scheduler:
+  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+  T_max: ${trainer.total_steps}
+  eta_min: 1.0e-06
+loss_function:
+  _target_: src.loss.ReconstructionLoss
+  mse_weight: 1.0
+  ssim_weight: 0.0
+  lpips_weight: 1.0
+  lpips_net: vgg
+  normalize_by_max: true
+trainer:
+  seed: 62
+  device: cuda
+  device_tensors:
+  - measurement
+  - target
+  n_epochs: 5
+  epoch_len: 10000
+  total_steps: 50000
+  log_step: 50
+  monitor: max validation_PSNR_mask_balanced
+  save_period: 5
+  keep_last_checkpoints: 2
+  early_stop: -1
+  save_dir: saved
+  resume_from: null
+  from_pretrained: null
+  override: false
+  skip_oom: false
+  max_grad_norm: null
+  amp:
+    enabled: true
+    dtype: bfloat16
+  mask_balanced_eval: true
+scale_condition:
+  name: finite-100
+  mask_mode: finite
+  mask_count: 100
+initialization:
+  name: xrestormer-gopro-pretrained
+  checkpoint_path: ${oc.env:XRESTORMER_CHECKPOINT}
+initialization_name: ${initialization.name}
+model_metadata:
+  parameter_count: 26041208
+official_checkpoint:
+  repository: https://github.com/Andrew0613/X-Restormer
+  url: https://drive.google.com/file/d/1akQHXC-PFHgj9iayHxFOm_leSc9t4RBC/view
+  license: MIT

@@ -1,0 +1,20 @@
+defaults:
+  - ref_psff_real_68_10k
+  - _self_
+
+condition_name: ohuf-psf-free-real-68-v1
+measurement_domain: real
+
+protocol:
+  experiment: OHUF-PSF-FREE-REAL-68-v1
+  purpose: matched measurement-only backbone for OHUF
+
+writer:
+  run_name: ohuf-psf-free-real-68-seed${trainer.seed}
+  group: ohuf-matched-backbones
+  job_type: psf-free-real-68
+  tags: [real, psf-free, ohuf, matched, fixed-budget]
+
+hydra:
+  run:
+    dir: outputs/train/ohuf-psf-free-real-68/seed${trainer.seed}/${now:%Y-%m-%d_%H-%M-%S}

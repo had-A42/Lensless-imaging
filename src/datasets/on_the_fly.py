@@ -125,6 +125,7 @@ class DigiCamOnTheFlyDataset:
         finite_cache_size=8,
         psf_cache=None,
         mask_factory=None,
+        flip_convolution_psf=True,
     ):
         self.scenes = scenes
         self.simulator_config = simulator_config
@@ -145,6 +146,7 @@ class DigiCamOnTheFlyDataset:
             build_digicam_mask,
             create_simulator=self.simulation_mode == "far_field",
         )
+        self.flip_convolution_psf = bool(flip_convolution_psf)
         self.mask_cache = OrderedDict()
         self.current_mask_seed = None
         self.current_mask = None
@@ -217,7 +219,12 @@ class DigiCamOnTheFlyDataset:
             self.convolver_cache[seed] = convolver
             return convolver
 
-        convolver = RealFFTConvolve2D(psf=_prepare_convolution_psf(psf))
+        convolution_psf = (
+            _prepare_convolution_psf(psf)
+            if self.flip_convolution_psf
+            else torch.as_tensor(np.asarray(psf), dtype=torch.float32)
+        )
+        convolver = RealFFTConvolve2D(psf=convolution_psf)
         self.convolver_cache[seed] = convolver
         while len(self.convolver_cache) > 2:
             self.convolver_cache.popitem(last=False)
@@ -270,6 +277,7 @@ class DigiCamOnTheFlyDataset:
         if "label" in scene:
             sample["label"] = scene["label"]
         if request.get("return_psf", False):
+            true_psf = _prepare_convolution_psf(psf)
             prompt_psf = psf
             prompt_mask_seed = request.get("prompt_mask_seed")
             if prompt_mask_seed is not None and int(prompt_mask_seed) != int(
@@ -281,12 +289,14 @@ class DigiCamOnTheFlyDataset:
                         "mode": request["mode"],
                     }
                 )
-            sample["psf"] = (
-                _prepare_convolution_psf(prompt_psf)
-                .squeeze(0)
-                .movedim(-1, 0)
-                .contiguous()
-            )
+            prompt_psf = _prepare_convolution_psf(prompt_psf)
+            if request.get("return_replay_psf", False):
+                sample["psf"] = true_psf.squeeze(0).movedim(-1, 0).contiguous()
+                sample["replay_psf"] = (
+                    prompt_psf.squeeze(0).movedim(-1, 0).contiguous()
+                )
+            else:
+                sample["psf"] = prompt_psf.squeeze(0).movedim(-1, 0).contiguous()
             sample["prompt_mask_id"] = request.get("prompt_mask_id", request["mask_id"])
         return sample
 
@@ -339,6 +349,7 @@ class DigiCamMaskBatchSampler:
         mask_records=None,
         infinite_base_seed=DEFAULT_MASK_SEED,
         return_psf=False,
+        return_replay_psf=False,
         operator_prompt_mode="none",
         rank=0,
         world_size=1,
@@ -351,7 +362,12 @@ class DigiCamMaskBatchSampler:
         self.mask_records = list(mask_records or [])
         self.infinite_base_seed = int(infinite_base_seed)
         self.operator_prompt_mode = _validate_operator_prompt_mode(operator_prompt_mode)
-        self.return_psf = bool(return_psf or self.operator_prompt_mode != "none")
+        self.return_replay_psf = bool(return_replay_psf)
+        self.return_psf = bool(
+            return_psf or self.return_replay_psf or self.operator_prompt_mode != "none"
+        )
+        if self.return_replay_psf and self.operator_prompt_mode == "none":
+            raise ValueError("return_replay_psf requires an operator prompt mode")
         self.rank = int(rank)
         self.world_size = int(world_size)
         self.start_step = 0
@@ -424,6 +440,7 @@ class DigiCamMaskBatchSampler:
                     "step": position,
                     "mode": self.mode,
                     "return_psf": self.return_psf,
+                    "return_replay_psf": self.return_replay_psf,
                 }
                 for slot, scene_index in enumerate(scene_indices)
             ]
@@ -585,6 +602,7 @@ class DigiCamValidationBatchSampler:
         run_seed,
         scenes_per_mask=4,
         return_psf=False,
+        return_replay_psf=False,
         operator_prompt_mode="none",
         scene_offset=0,
         scene_selector_salt=59,
@@ -595,7 +613,12 @@ class DigiCamValidationBatchSampler:
         self.run_seed = int(run_seed)
         self.scenes_per_mask = int(scenes_per_mask)
         self.operator_prompt_mode = _validate_operator_prompt_mode(operator_prompt_mode)
-        self.return_psf = bool(return_psf or self.operator_prompt_mode != "none")
+        self.return_replay_psf = bool(return_replay_psf)
+        self.return_psf = bool(
+            return_psf or self.return_replay_psf or self.operator_prompt_mode != "none"
+        )
+        if self.return_replay_psf and self.operator_prompt_mode == "none":
+            raise ValueError("return_replay_psf requires an operator prompt mode")
         self.scene_offset = int(scene_offset)
         self.scene_selector_salt = int(scene_selector_salt)
 
@@ -642,6 +665,7 @@ class DigiCamValidationBatchSampler:
                         "step": step,
                         "mode": "finite",
                         "return_psf": self.return_psf,
+                        "return_replay_psf": self.return_replay_psf,
                     }
                     for scene_index in batch_scene_indices
                 ]
@@ -848,8 +872,11 @@ def build_on_the_fly_dataloaders(
     paired_scene_count=None,
     cross_validation_steps=0,
     return_psf=False,
+    return_replay_psf=False,
     operator_prompt_mode="none",
     validation_mask_split="validation",
+    allow_test=False,
+    flip_convolution_psf=True,
 ):
     if train_mask_seed is None:
         train_mask_seed = base_mask_seed
@@ -866,8 +893,10 @@ def build_on_the_fly_dataloaders(
     if validation_scenes is None:
         validation_scenes = _scene_dataset(datasets_config.validation)
 
-    if validation_mask_split not in {"train", "validation"}:
-        raise ValueError("validation_mask_split must be train or validation")
+    if validation_mask_split not in {"train", "validation", "test"}:
+        raise ValueError("validation_mask_split must be train, validation or test")
+    if validation_mask_split == "test" and not allow_test:
+        raise ValueError("test masks require allow_test=True")
     if validation_mask_split == "train" and (
         train_mode != "finite"
         or finite_mask_count is None
@@ -878,6 +907,7 @@ def build_on_the_fly_dataloaders(
         train_mask_seed if validation_mask_split == "train" else evaluation_mask_seed,
         validation_mask_split,
         int(validation_mask_count),
+        allow_test=bool(allow_test),
     )
 
     psf_cache = dict(psf_cache or {})
@@ -894,6 +924,7 @@ def build_on_the_fly_dataloaders(
         finite_cache_size=finite_cache_size,
         psf_cache=psf_cache,
         mask_factory=mask_factory,
+        flip_convolution_psf=flip_convolution_psf,
     )
 
     if validation_dataset.psf_cache.warmup:
@@ -905,6 +936,7 @@ def build_on_the_fly_dataloaders(
         run_seed=validation_seed,
         mask_records=validation_records,
         return_psf=return_psf,
+        return_replay_psf=return_replay_psf,
         operator_prompt_mode=operator_prompt_mode,
     )
 
@@ -965,6 +997,7 @@ def build_on_the_fly_dataloaders(
         finite_cache_size=finite_cache_size,
         psf_cache=psf_cache,
         mask_factory=mask_factory,
+        flip_convolution_psf=flip_convolution_psf,
     )
     if train_dataset.psf_cache.warmup and train_records is not None:
         train_dataset.warmup_psf_cache(train_records)
@@ -995,6 +1028,7 @@ def build_on_the_fly_dataloaders(
             mask_records=train_records,
             infinite_base_seed=train_mask_seed,
             return_psf=return_psf,
+            return_replay_psf=return_replay_psf,
             operator_prompt_mode=operator_prompt_mode,
         )
     train_generator = torch.Generator().manual_seed(int(run_seed))

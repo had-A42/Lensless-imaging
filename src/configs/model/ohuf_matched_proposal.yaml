@@ -1,0 +1,10 @@
+_target_: src.model.psf_free_drunet.PSFFreeDRUNet
+channels: 3
+nc: [32, 64, 128, 256]
+depth: 4
+noise_level: 1.0
+trainable_noise_level: true
+checkpoint_path: ${oc.env:OHUF_PSF_FREE_CHECKPOINT,./saved/ohuf-psf-free-real-68/checkpoint-epoch10.pth}
+strict_checkpoint: true
+output_crop: [80, 100, 200, 266]
+output_normalization: positive_max

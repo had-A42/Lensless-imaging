@@ -1,0 +1,20 @@
+defaults:
+  - ohuf_published_confirmation_eval
+  - override model: ohuf_matched_proposal
+  - _self_
+
+condition_name: ohuf-matched-baseline-confirmation
+
+protocol:
+  status: matched_checkpoint_template
+  checkpoint_masks_are_held_out: true
+
+provenance:
+  experiment: OHUF-MATCHED-01-BASELINE
+
+inferencer:
+  save_path: ohuf-matched-baseline-confirmation
+
+hydra:
+  run:
+    dir: outputs/inference/ohuf-matched-baseline/${now:%Y-%m-%d_%H-%M-%S}

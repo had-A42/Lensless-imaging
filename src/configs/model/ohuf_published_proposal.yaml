@@ -1,0 +1,10 @@
+_target_: src.model.psf_free_drunet.PSFFreeDRUNet
+channels: 3
+nc: [32, 64, 128, 256]
+depth: 4
+noise_level: 1.0
+trainable_noise_level: true
+checkpoint_path: data/models/digicam-mirflickr-multi-25k-unet8M/recon_epochBEST
+strict_checkpoint: true
+output_crop: [80, 100, 200, 266]
+output_normalization: positive_max

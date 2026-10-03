@@ -1,0 +1,18 @@
+defaults:
+  - review_xrest_lower_lr
+  - _self_
+
+dataloader_builder:
+  batch_size: 1
+  train_steps: 200000
+
+trainer:
+  accumulation_steps: 4
+
+writer:
+  group: coursework-review-xrest-accumulation-v1
+  tags: [synthetic, psf-free, xrestormer, lower-lr, accumulation4, supervisor-review]
+
+hydra:
+  run:
+    dir: outputs/coursework_review_optimization_v1_20260916/hydra/${writer.run_name}

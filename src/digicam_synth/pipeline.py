@@ -395,7 +395,10 @@ def pattern_to_psf(
 
 
 @contextmanager
-def _deterministic_backend_seed(seed: int) -> Iterator[None]:
+def _deterministic_backend_seed(
+    seed: int,
+    cuda_devices: list[int] | None = None,
+) -> Iterator[None]:
     numpy_state = np.random.get_state()
     np.random.seed(seed)
     if torch is None:
@@ -405,9 +408,7 @@ def _deterministic_backend_seed(seed: int) -> Iterator[None]:
             np.random.set_state(numpy_state)
         return
 
-    cuda_devices = (
-        list(range(torch.cuda.device_count())) if torch.cuda.is_available() else []
-    )
+    cuda_devices = list(cuda_devices or [])
     try:
         with torch.random.fork_rng(devices=cuda_devices):
             torch.manual_seed(seed)
@@ -471,7 +472,13 @@ def forward_single_sample(
     previous_object_height = simulator.object_height
     simulator.object_height = object_height
     try:
-        with _deterministic_backend_seed(seed):
+        cuda_devices = []
+        if isinstance(scene_backend, torch.Tensor) and scene_backend.is_cuda:
+            device_index = scene_backend.device.index
+            cuda_devices = [
+                torch.cuda.current_device() if device_index is None else device_index
+            ]
+        with _deterministic_backend_seed(seed, cuda_devices=cuda_devices):
             measurement, target = simulator.propagate_image(
                 scene_backend, return_object_plane=True
             )

@@ -1,0 +1,67 @@
+defaults:
+  - model: physical_unrolled_admm
+  - writer: wandb_lensless
+  - metrics: physical_replay
+  - datasets: digicam_ref_psff_outer17_eval
+  - dataloader: reconstruction
+  - simulator: digicam_article
+  - transforms: reconstruction
+  - _self_
+
+condition_name: review-real-physical-outer17
+
+protocol:
+  experiment: review-real-physical-outer17-v1
+  information_regime: real measurement + correct/cyclic-wrong generated PSF
+  evaluation_role: already-opened outer development; no tuning or selection
+
+model:
+  output_crop: [80, 100, 200, 266]
+
+metrics:
+  device: ${inferencer.device}
+
+dataloader:
+  batch_size: 4
+  num_workers: 8
+  pin_memory: true
+  prefetch_factor: 2
+  persistent_workers: false
+  shuffle: false
+  drop_last: false
+
+inferencer:
+  device_tensors: [measurement, psf, replay_psf, target]
+  device: cuda
+  seed: 42
+  output_type: reconstruction
+  save_dir: saved
+  from_pretrained: null
+  skip_model_load: false
+  override: false
+  example_indices: [0, 249, 250, 2124, 4249]
+
+writer:
+  run_name: review-real-physical-outer17-replay
+  group: coursework-review-real-physical-outer17-v1
+  job_type: correct-vs-cyclic-wrong
+  tags: [real, outer17, psf-aware, physical, unrolled-admm, psf-replay]
+  loss_names: []
+  log_checkpoints: false
+  log_best_checkpoint_at_end: false
+  log_images: false
+
+provenance:
+  experiment: review-real-physical-outer17-v1
+  dataset_repo: bezzam/DigiCam-Mirflickr-MultiMask-25K
+  dataset_revision: 21d82b67662ed1e590a40c98688c32cb3c74f079
+  mask_ids: [41, 24, 19, 88, 57, 27, 26, 32, 64, 16, 86, 15, 91, 44, 36, 20, 60]
+  row_slot_start: 0
+  row_slot_count: 250
+  expected_samples: 4250
+  expected_masks: 17
+  expected_scenes_per_mask: 250
+
+hydra:
+  run:
+    dir: outputs/coursework_review_physics_v1_20260916/outer17/${writer.run_name}
